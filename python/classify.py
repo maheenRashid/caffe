@@ -15,6 +15,7 @@ import caffe
 
 
 def main(argv):
+    print argv
     pycaffe_dir = os.path.dirname(__file__)
 
     parser = argparse.ArgumentParser()
@@ -120,28 +121,34 @@ def main(argv):
     if args.input_file.endswith('npy'):
         inputs = np.load(args.input_file)
     elif os.path.isdir(args.input_file):
-        inputs =[caffe.io.load_image(im_f)
-                 for im_f in glob.glob(args.input_file + '/*.' + args.ext)]
+        file_list=[im_f for im_f in glob.glob(args.input_file + '/*.' + args.ext)];
+        file_list.sort();
+        inputs =[caffe.io.load_image(im_f) for im_f in file_list]
     else:
         inputs = [caffe.io.load_image(args.input_file)]
+
+    if args.gpu!='':
+        print("GPU mode")
+    else:
+        print("CPU mode")
 
     print "Classifying %d inputs." % len(inputs)
 
     # Classify.
-    start = time.time()
-    predictions = classifier.predict(inputs, not args.center_only)
-    print "Done in %.2f s." % (time.time() - start)
-    
-
-    # Save
-    
     if args.layer is None:
+        start = time.time()
+        predictions = classifier.predict(inputs, not args.center_only)
+        print "Done in %.2f s." % (time.time() - start)
         np.save(args.output_file, predictions)    
+        print 'predictions saved to ',args.output_file
     else:
-        key_names=[x for x in set(args.layer) if x in classifier.blobs.keys()]
-        dict_to_save = {key_name: classifier.blobs.get(key_name).data for key_name in key_names}
-        dict_to_save['predictions']=predictions
-        np.savez_compressed(args.output_file,**dict_to_save)
+        start = time.time()
+        predictions,out = classifier.predict(inputs, not args.center_only, args.layer)
+        print "Done in %.2f s." % (time.time() - start)
+        
+        out['predictions']=predictions
+        np.savez_compressed(args.output_file,**out)
+        print out.keys(),' saved to ',args.output_file
     
 
 

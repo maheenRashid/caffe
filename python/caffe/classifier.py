@@ -45,7 +45,7 @@ class Classifier(caffe.Net):
         self.image_dims = image_dims
 
 
-    def predict(self, inputs, oversample=True):
+    def predict(self, inputs, oversample=True, additionalOutputs=[]):
         """
         Predict classification probabilities of inputs.
 
@@ -59,6 +59,11 @@ class Classifier(caffe.Net):
                      for N images and C classes.
         """
         # Scale to standardize input dimensions.
+        # other_outputs=[x for x in additionalOutputs if x in self._layer_names];
+        if additionalOutputs != []:
+            blobs=[x for x in additionalOutputs if x in self._layer_names]
+        else:
+            blobs=None
         input_ = np.zeros((len(inputs),
             self.image_dims[0], self.image_dims[1], inputs[0].shape[2]),
             dtype=np.float32)
@@ -82,12 +87,15 @@ class Classifier(caffe.Net):
                             dtype=np.float32)
         for ix, in_ in enumerate(input_):
             caffe_in[ix] = self.transformer.preprocess(self.inputs[0], in_)
-        out = self.forward_all(**{self.inputs[0]: caffe_in})
+        
+        out = self.forward_all(blobs=blobs,**{self.inputs[0]: caffe_in})
         predictions = out[self.outputs[0]].squeeze(axis=(2,3))
 
         # For oversampling, average predictions across crops.
         if oversample:
             predictions = predictions.reshape((len(predictions) / 10, 10, -1))
             predictions = predictions.mean(1)
-
-        return predictions
+        if additionalOutputs!=[]:
+            return predictions,out
+        else:
+            return predictions

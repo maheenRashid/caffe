@@ -167,7 +167,6 @@ def _Net_forward_all(self, blobs=None, **kwargs):
     if pad:
         for out in all_outs:
             all_outs[out] = all_outs[out][:-pad]
-    print all_outs.keys();
     return all_outs
 
 

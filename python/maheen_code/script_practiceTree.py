@@ -23,7 +23,7 @@ def main():
 
 	val_data_ids='/home/maheenrashid/Downloads/caffe/caffe-rc2/data/ilsvrc12/synsets.txt';
 	is_file='/disk2/imagenet/structure_files/is_a.txt';
-	out_dir='/disk2/imagenet/not_trained_im'
+	out_dir='/disk2/imagenet/not_trained_im_tars'
 
 	list_of_nets='http://www.image-net.org/api/text/imagenet.synset.obtain_synset_list';
 	per_class_urls='http://www.image-net.org/api/text/imagenet.synset.geturls?wnid=';
@@ -145,28 +145,37 @@ def main():
 	if not os.path.exists(out_dir):
 		os.mkdir(out_dir);
 
+	pre_path='http://www.image-net.org/download/synset?wnid='
+	post_path='&username=maheenr&accesskey=a4e22b31277877bf1089983e0b79ce4464fe1c91&release=latest&src=stanford'
 	for idx_bunch,select_ids_str in enumerate(select_ids_meta):
 		print idx_bunch
 		for select_id in select_ids_str:
 			print select_id,
-			curr_url=per_class_urls+select_id;
-			f = urllib2.urlopen(curr_url)
-			image_links = f.readlines()
-			image_links = [id.strip('\n').strip('\r') for id in image_links]
-			f.close();
-			print len(image_links);				
-			random.shuffle(image_links);
-			out_file_pre=select_id+'_';
-			saved=0;
-			for idx,image_link in enumerate(image_links):
-				out_file_curr=os.path.join(out_dir,out_file_pre+str(idx)+'.JPEG');
-				try:
-					urllib.urlretrieve(image_link,out_file_curr);
-				except:
-					continue;
-				saved+=1;
-				if saved==50:
-					break;
+			out_file_curr=os.path.join(out_dir,select_id+'.tar');
+			print out_file_curr
+			image_link=pre_path+select_id+post_path;
+			urllib.urlretrieve(image_link,out_file_curr);
+
+
+
+			# curr_url=per_class_urls+select_id;
+			# f = urllib2.urlopen(curr_url)
+			# image_links = f.readlines()
+			# image_links = [id.strip('\n').strip('\r') for id in image_links]
+			# f.close();
+			# print len(image_links);				
+			# random.shuffle(image_links);
+			# out_file_pre=select_id+'_';
+			# saved=0;
+			# for idx,image_link in enumerate(image_links):
+			# 	out_file_curr=os.path.join(out_dir,out_file_pre+str(idx)+'.JPEG');
+			# 	try:
+			# 		urllib.urlretrieve(image_link,out_file_curr);
+			# 	except:
+			# 		continue;
+			# 	saved+=1;
+			# 	if saved==50:
+			# 		break;
 
 			
 

@@ -12,11 +12,11 @@ import time
 import shutil
 import pickle
 import sklearn
-import sklearn.neighbors as neighbors
 import collections
 import matplotlib
 matplotlib.use('Agg')
-
+import sklearn;
+from sklearn import preprocessing
 import matplotlib.pyplot as plt;
 import math;
 import glob;
@@ -26,8 +26,6 @@ def doNN(img_paths,gt_labels,features_curr,numberOfN=5,distance='cosine',algo='b
     gt_labels_uni.sort();
 
     conf_matrix=np.zeros((len(gt_labels_uni),len(gt_labels_uni)));
-
-    nn=neighbors.NearestNeighbors(n_neighbors=numberOfN+1,metric=distance,algorithm=algo);
 
     feature_len=1;
     for dim_val in list(features_curr.shape)[1:]:
@@ -52,8 +50,8 @@ def doNN(img_paths,gt_labels,features_curr,numberOfN=5,distance='cosine',algo='b
     
     return indices, conf_matrix;
 
-def randomlySelectTestSet(path_to_val,val_gt_file,no_classes=50,no_im=5):
 
+def randomlySelectTestSet(path_to_val,val_gt_file,no_classes=50,no_im=5):
     
     f=open(val_gt_file,'rb');
     gt_classes=[x.strip('\n').split(' ') for x in f.readlines()];
@@ -219,6 +217,28 @@ def script_classificationOld():
         img_paths=[x.replace('/disk2','../..') for x in img_paths];
         im_paths,captions=createImageAndCaptionGrid(img_paths,gt_labels,indices,text_labels)
         writeHTML(file_name_l+'.html',im_paths,captions)
+
+def runNNMetaScript(file_name,numberOfN,layers,relativePaths,text_labels):
+    test_set,_=pickle.load(open(file_name+'.p','rb'));
+    vals=np.load(file_name+'.npz');
+
+    test_set=sorted(test_set,key=lambda x: x[0])
+    test_set=zip(*test_set);
+    
+    img_paths=list(test_set[0]);
+    gt_labels=list(test_set[1]);
+    
+    # numberOfN=5;
+
+    for layer in layers:
+
+        file_name_l=file_name+'_'+layer;
+        indices,conf_matrix=doNN(img_paths,gt_labels,vals[layer],numberOfN=numberOfN,distance='cosine',algo='brute')
+        pickle.dump([img_paths,gt_labels,indices,conf_matrix],open(file_name_l+'.p','wb'));
+        img_paths=[x.replace(relativePaths[0],relativePaths[1]) for x in img_paths];
+        im_paths,captions=createImageAndCaptionGrid(img_paths,gt_labels,indices,text_labels)
+        writeHTML(file_name_l+'.html',im_paths,captions)
+
 
 def script_createBigGTFile():
     path_to_xml='/disk2/imagenet/structure_files/structure_released.xml';

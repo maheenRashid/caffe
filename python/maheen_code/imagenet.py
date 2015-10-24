@@ -103,7 +103,7 @@ def makeIdIntoInt(ids):
 		ids_int.append(int(id.strip('n')));
 	return ids_int
 
-def removeClassesWithOverlap(ids,ids_to_remove):
+def removeClassesWithOverlap(ids,ids_to_remove,keepMapping=False):
 	val_just_ids_int=np.array(makeIdIntoInt(ids));
 
 	to_exclude=[];
@@ -112,22 +112,27 @@ def removeClassesWithOverlap(ids,ids_to_remove):
 		to_exclude_curr=np.array(makeIdIntoInt(to_exclude_curr));
 		indices=np.where(np.in1d(val_just_ids_int,to_exclude_curr))[0];
 		ids_to_exclude=[ids[idx] for idx in indices];
-		to_exclude.extend(ids_to_exclude);
+		if keepMapping:
+			to_exclude.append(ids_to_exclude);
+		else:
+			to_exclude.extend(ids_to_exclude);
 
 	return to_exclude;
-		
-def removeImagesFromListByClass(im_list_file,mapping_file,classes_to_remove):
-	ims,class_ids=zip(*readLabelsFile(im_list_file));
+
+def getImagenetIdToTrainingIdMapping(mapping_file,list_of_ids_imagenet):
 	with open(mapping_file,'rb') as f:
 		mappings=f.readlines();
 	mappings=[mapping.strip('\n').strip('\r') for mapping in mappings];
 	
-	class_ids=np.array([int(class_id) for class_id in class_ids]);
-	
-	class_id_to_remove=[mappings.index(class_to_remove) for class_to_remove in classes_to_remove];
-	
-	idx_to_keep=np.where(np.in1d(class_ids,class_id_to_remove)==0)[0];
+	class_ids=[mappings.index(class_id) for class_id in list_of_ids_imagenet];
 
+	return class_ids
+	
+def removeImagesFromListByClass(im_list_file,mapping_file,classes_to_remove):
+	ims,class_ids=zip(*readLabelsFile(im_list_file));
+	class_ids=np.array([int(class_id) for class_id in class_ids]);
+	class_id_to_remove=getImagenetIdToTrainingIdMapping(mapping_file,classes_to_remove);
+	idx_to_keep=np.where(np.in1d(class_ids,class_id_to_remove)==0)[0];
 	ims_to_keep=[ims[idx] for idx in idx_to_keep];
 	classes_to_keep=[mappings[class_ids[idx]] for idx in idx_to_keep];
 	class_ids_to_keep=class_ids[idx_to_keep]
@@ -151,48 +156,37 @@ def writeNewDataClassFile(new_file_val,im_and_class,shuffle=True):
 			f.write(str_to_write);
 	return classes_uni
 
+def selectTestSetByID(val_gt_file,list_of_ids,path_to_val=None,random=False,max_num=None):
+    im_list,gt_classes=zip(*readLabelsFile(val_gt_file));
+    gt_classes=makeIdIntoInt(list(gt_classes));
+    
+    gt_classes=np.array(gt_classes);
+    uni_classes=np.unique(gt_classes);
+    idx_chosen_images=[];
+
+    for select_class in list_of_ids:
+        idx_rand_class=np.where(gt_classes==select_class)[0];
+        
+        if max_num is None:
+        	no_im=len(idx_rand_class);
+        else:
+        	no_im=min(max_num,len(idx_rand_class));
+
+        if random:
+			idx_chosen=random.sample(idx_rand_class,no_im);        	
+        else:
+        	idx_chosen=idx_rand_class[:no_im];
+
+        idx_chosen_images.extend(idx_chosen);
+        
+    im_list_chosen=[ os.path.join(path_to_val,im_list[idx_curr]) if path_to_val is not None else im_list[idx_curr] for idx_curr in idx_chosen_images ]
+
+    gt_class_chosen=gt_classes[idx_chosen_images];
+
+    return zip(im_list_chosen,gt_class_chosen);
+
 def main():
-	path_to_file='../../data/ilsvrc12/synset_words.txt'
-	val_ids=readLabelsFile(path_to_file);
-	val_just_ids=list(zip(*val_ids)[0]);
-	val_just_labels=list(zip(*val_ids)[1]);
-
-	pascal_ids_file='/disk2/octoberExperiments/nn_performance_without_pascal/pascal_classes.txt'
-	pascal_ids=readLabelsFile(pascal_ids_file);
-	pascal_just_ids=list(zip(*pascal_ids)[0]);
-
-	to_exclude=removeClassesWithOverlap(val_just_ids,pascal_just_ids);
-	
-	im_list_file='../../data/ilsvrc12/val.txt';
-	mapping_file='../../data/ilsvrc12/synsets.txt';
-
-	ims_to_keep,class_ids_to_keep,classes_to_keep=removeImagesFromListByClass(im_list_file,mapping_file,to_exclude);
-	
-	new_file_val='/disk2/octoberExperiments/nn_performance_without_pascal/val.txt';
-	classes_uni_val=writeNewDataClassFile(new_file_val,zip(ims_to_keep,classes_to_keep));
-	
-	im_list_file='../../data/ilsvrc12/train.txt';
-	ims_to_keep,class_ids_to_keep,classes_to_keep=removeImagesFromListByClass(im_list_file,mapping_file,to_exclude);
-
-	new_file_val='/disk2/octoberExperiments/nn_performance_without_pascal/train.txt';
-	classes_uni_train=writeNewDataClassFile(new_file_val,zip(ims_to_keep,classes_to_keep));
-
-	assert(str(classes_uni_val)==str(classes_uni_train))
-	
-	class_file='/disk2/octoberExperiments/nn_performance_without_pascal/synsets.txt';
-	
-	with open(class_file,'wb') as f:
-		for class_id in classes_uni_train:
-			f.write(class_id+'\n');
-
-	with open(new_file_val,'rb') as f:
-		content=f.read();
-
-	#sanity check
-	for id_to_exclude in to_exclude:
-		if id_to_exclude in content:
-			print 'FOUND ERROR',id_to_exclude
-
+	print 'hello. running imagenet'
 
 if __name__=='__main__':
 	main();

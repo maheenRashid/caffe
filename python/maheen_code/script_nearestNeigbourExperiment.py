@@ -74,7 +74,7 @@ def randomlySelectTestSet(path_to_val,val_gt_file,no_classes=50,no_im=5):
 
     return zip(im_list_chosen,gt_class_chosen);
 
-def runClassificationTestSet(test_set,out_dir,path_to_classify,gpu_no,layers,ext='JPEG',central_crop=True):
+def runClassificationTestSet(test_set,out_dir,path_to_classify,gpu_no,layers,ext='JPEG',central_crop=True,meanFile=None,deployFile=None,modelFile=None):
 
     if not os.path.exists(out_dir):
         os.mkdir(out_dir);
@@ -85,20 +85,32 @@ def runClassificationTestSet(test_set,out_dir,path_to_classify,gpu_no,layers,ext
     pickle.dump([test_set,layers],open(os.path.join(out_dir,out_file+'.p'),'wb'));
     
     temp_dir=out_dir+'_temp';
-    if os.path.exists(temp_dir):
-        shutil.rmtree(temp_dir)
-    os.mkdir(temp_dir);
+    # if os.path.exists(temp_dir):
+    #     shutil.rmtree(temp_dir)
+    # os.mkdir(temp_dir);
 
-    for im_path,gt_val in test_set:
-        file_name=im_path[im_path.rfind('/')+1:]
-        shutil.copy(im_path,os.path.join(temp_dir,file_name));
+    # for im_path,gt_val in test_set:
+    #     file_name=im_path[im_path.rfind('/')+1:]
+    #     shutil.copy(im_path,os.path.join(temp_dir,file_name));
 
     out_file=os.path.join(out_dir,out_file);
     command=[os.path.join(path_to_classify,'classify.py'),temp_dir,out_file,'--ext',ext,'--gpu',str(gpu_no),'--layer']+layers;
 
     if central_crop:
         command=command+["--center_only"]
+
+    if meanFile is not None:
+        command=command+["--mean_file",meanFile];
+        
+    if deployFile is not None:
+        command=command+["--model_def",deployFile];
+    
+    if modelFile is not None:
+        command=command+["--pretrained_model",modelFile];
+
     command_formatted=' '.join(command);
+    print command_formatted
+    # return out_file
     subprocess.call(command_formatted, shell=True)
     return out_file;
 
@@ -227,18 +239,16 @@ def runNNMetaScript(file_name,numberOfN,layers,relativePaths,text_labels):
     
     img_paths=list(test_set[0]);
     gt_labels=list(test_set[1]);
-    
-    # numberOfN=5;
 
     for layer in layers:
 
         file_name_l=file_name+'_'+layer;
         indices,conf_matrix=doNN(img_paths,gt_labels,vals[layer],numberOfN=numberOfN,distance='cosine',algo='brute')
         pickle.dump([img_paths,gt_labels,indices,conf_matrix],open(file_name_l+'.p','wb'));
+
         img_paths=[x.replace(relativePaths[0],relativePaths[1]) for x in img_paths];
         im_paths,captions=createImageAndCaptionGrid(img_paths,gt_labels,indices,text_labels)
         writeHTML(file_name_l+'.html',im_paths,captions)
-
 
 def script_createBigGTFile():
     path_to_xml='/disk2/imagenet/structure_files/structure_released.xml';

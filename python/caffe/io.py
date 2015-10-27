@@ -7,6 +7,15 @@ from caffe.proto import caffe_pb2
 
 ## proto / datum / ndarray conversion
 
+def saveProtoAsNpy(in_file,out_file):
+    blob = caffe_pb2.BlobProto()
+    data = open(in_file , 'rb' ).read()
+    blob.ParseFromString(data)
+    arr = np.array( blobproto_to_array(blob) )
+    out = arr[0]
+    np.save( out_file , out )
+
+
 def blobproto_to_array(blob, return_diff=False):
     """Convert a blob proto to an array. In default, we will just return the data,
     unless return_diff is True, in which case we will return the diff.

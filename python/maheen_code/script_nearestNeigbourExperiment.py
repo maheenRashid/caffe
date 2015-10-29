@@ -36,18 +36,21 @@ def doNN(img_paths,gt_labels,features_curr,numberOfN=5,distance='cosine',algo='b
         features_curr[features_curr!=0]=1;
     
     features_curr=sklearn.preprocessing.normalize(features_curr, norm='l2', axis=1);
+
     distances=np.dot(features_curr,features_curr.T);
     np.fill_diagonal(distances,0.0);
 
     indices=np.argsort(distances, axis=1)[:,::-1]
-    indices=indices[:,:numberOfN];
+    if numberOfN is not None:
+        indices=indices[:,:numberOfN];
+
     
-    for row in range(indices.shape[0]):
-        for col in range(len(indices[0])):
-                gt_label=gt_labels[row];
-                pred_label=gt_labels[indices[row,col]];
-                conf_matrix[gt_labels_uni.index(gt_label),gt_labels_uni.index(pred_label)]+=1;
-    
+    # for row in range(indices.shape[0]):
+    #     for col in range(len(indices[0])):
+    #             gt_label=gt_labels[row];
+    #             pred_label=gt_labels[indices[row,col]];
+    #             conf_matrix[gt_labels_uni.index(gt_label),gt_labels_uni.index(pred_label)]+=1;
+    conf_matrix=0;
     return indices, conf_matrix;
 
 
@@ -85,13 +88,13 @@ def runClassificationTestSet(test_set,out_dir,path_to_classify,gpu_no,layers,ext
     pickle.dump([test_set,layers],open(os.path.join(out_dir,out_file+'.p'),'wb'));
     
     temp_dir=out_dir+'_temp';
-    # if os.path.exists(temp_dir):
-    #     shutil.rmtree(temp_dir)
-    # os.mkdir(temp_dir);
+    if os.path.exists(temp_dir):
+        shutil.rmtree(temp_dir)
+    os.mkdir(temp_dir);
 
-    # for im_path,gt_val in test_set:
-    #     file_name=im_path[im_path.rfind('/')+1:]
-    #     shutil.copy(im_path,os.path.join(temp_dir,file_name));
+    for im_path,gt_val in test_set:
+        file_name=im_path[im_path.rfind('/')+1:]
+        shutil.copy(im_path,os.path.join(temp_dir,file_name));
 
     out_file=os.path.join(out_dir,out_file);
     command=[os.path.join(path_to_classify,'classify.py'),temp_dir,out_file,'--ext',ext,'--gpu',str(gpu_no),'--layer']+layers;
@@ -296,10 +299,12 @@ def getNumberOfCorrectNNMatches(indices,gt_labels):
 
     bin_correct=np.equal(labels_mat,gt_labels_tile);
     no_correct=[]
+    no_correct_per_val=np.sum(bin_correct,1);
 
     for c in range(bin_correct.shape[1]):
         no_correct.append(sum(np.sum(bin_correct[:,:c+1],1)>0)/float(bin_correct.shape[0]));
-    return no_correct
+
+    return no_correct,no_correct_per_val
 
 def script_createVisualization():
 
@@ -402,7 +407,7 @@ def plotErrorBars(dict_to_plot,x_lim,y_lim,xlabel,y_label,title,out_file,margin=
     plt.ylim([min_val_seen_y-margin[1],max_val_seen_y+margin[1]]);
     plt.legend(handles, dict_to_plot.keys(),loc=loc)
     plt.savefig(out_file);
-    
+
 
 def main():
     in_dir='/disk2/octoberExperiments/nn_trained_vs_notrained';
@@ -553,6 +558,30 @@ def main():
             im_paths,captions=createImageAndCaptionGrid(img_paths,gt_labels,indices,text_labels)
             writeHTML(file_name_l+'.html',im_paths,captions)
 
+def sortByPerformance(indices,gt_labels,sortType=0,perClass=True):
+    no_correct,no_correct_per=getNumberOfCorrectNNMatches(indices,gt_labels)
+    idx_gt_labels=np.digitize(gt_labels,np.unique(gt_labels),True);
+    idx_sort_binned=np.zeros(shape=no_correct_per.shape);
+    if perClass:
+        start_idx=0;
+        for idx_gt_label_uni,gt_label_uni in enumerate(np.unique(gt_labels)):
+            idx_rel=np.where(idx_gt_labels==gt_label_uni)[0];
+            no_correct_rel=no_correct_per[idx_rel];
+            if sortType==0:
+                sort_idx=np.argsort(no_correct_rel);
+            else:
+                sort_idx=np.argsort(no_correct_rel)[::-1];
+            sort_idx=idx_rel[sort_idx];
+            idx_sort_binned[start_idx:start_idx+len(sort_idx)]=sort_idx;
+            start_idx=start_idx+len(sort_idx);
+        idx_sort_binned=idx_sort_binned.astype(int);
+    else:
+        idx_sort_binned=np.argsort(no_correct_per);
+        if sortType==0:
+            idx_sort_binned=idx_sort_binned;
+        else:
+            idx_sort_binned=idx_sort_binned[::-1];
+    return idx_sort_binned
     
 
 if __name__=='__main__':

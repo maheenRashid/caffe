@@ -1,3 +1,4 @@
+# 
 import os;
 import scipy;
 import mat4py;
@@ -7,8 +8,182 @@ import visualize;
 import numpy as np;
 import glob
 import script_nearestNeigbourExperiment
-import pickle
+import cPickle as pickle;
 import matplotlib.pyplot as plt;
+
+import time;
+
+def script_savePerClassPerDegreeHistograms():
+    train_pre='/disk2/octoberExperiments/nn_performance_without_pascal/pascal_3d/trained/20151027204114'
+    non_train_pre='/disk2/octoberExperiments/nn_performance_without_pascal/pascal_3d/no_trained/20151027203547'
+    dirs=[dir[:-7] for dir in os.listdir('/disk2/pascal_3d/PASCAL3D+_release1.0/Annotations') if dir.endswith('_pascal')];
+    layers=['pool5','fc6','fc7'];
+    degrees=[0,45,90,135,180];
+    # degrees=[90];
+    # dirs=['train']
+    delta=5;
+    for file_pre in [train_pre,non_train_pre]:
+        for layer in layers:
+            curr_dir=os.path.join(file_pre+'_'+layer+'_all_azimuths');
+            for dir in dirs:
+                print dir
+                curr_file=os.path.join(curr_dir,dir+'_data.p');
+                [diffs_curr,dists_curr]=pickle.load(open(curr_file,'rb'));
+                for degree in degrees:
+                    
+                    title=dir+' '+str(degree)+' delta '+str(delta)
+
+                    out_file=os.path.join(curr_dir,dir+'_'+str(degree)+'_'+str(delta)+'_compress_data.p')
+                    print out_file
+                    try:
+                        hists,bins=getDistanceHistograms(diffs_curr,degree,delta=delta,normed=True,bins=10);
+                        pickle.dump([hists,bins],open(out_file,'wb'));                        
+
+                        out_file=os.path.join(curr_dir,dir+'_'+str(degree)+'_'+str(delta)+'_non_compress_data.p')
+                        hists,bins=getDistanceHistograms(diffs_curr,degree,dists_curr=dists_curr,delta=delta,normed=True,bins=10);
+
+                        pickle.dump([hists,bins],open(out_file,'wb'));
+                    except:
+                        print 'error'
+                        print out_file
+
+                    # out_file=os.path.join(curr_dir,dir+'_'+str(degree)+'_'+str(delta)+'_compress.png');
+                    # # print out_file
+
+                    # try:
+                    #     visualize.plotDistanceHistograms(diffs_curr,degree,out_file,title=title,delta=delta,dists_curr=None,bins=10,normed=True)
+                    #     out_file=os.path.join(curr_dir,dir+'_'+str(degree)+'_'+str(delta)+'_non_compress.png');
+
+                    #     visualize.plotDistanceHistograms(diffs_curr,degree,out_file,title=title,delta=delta,dists_curr=dists_curr,bins=10,normed=True)
+                    # except:
+                    #     print 'error'
+                    #     print out_file
+
+def getDistanceHistograms(diffs_curr,degree,delta=0,dists_curr=None,bins=10,normed=False):
+
+    if dists_curr is None:
+        dists_curr=np.array(range(1,diffs_curr.shape[1]+1));
+        dists_curr=np.expand_dims(dists_curr,0);
+        dists_curr=np.repeat(dists_curr,diffs_curr.shape[0],0);
+
+    diffs=diffs_curr-degree;
+    diffs=abs(diffs);
+    idx=np.where(diffs<=delta)
+    dists=dists_curr[idx[0],idx[1]];
+    hist,bin_edges=np.histogram(dists, bins=bins, normed=normed)
+    return hist,bin_edges
+
+
+
+def script_createHistDifferenceHTML():
+    out_dir_meta='/disk2/octoberExperiments/nn_performance_without_pascal/pascal_3d';
+    train_pre='/disk2/octoberExperiments/nn_performance_without_pascal/pascal_3d/trained/20151027204114'
+    non_train_pre='/disk2/octoberExperiments/nn_performance_without_pascal/pascal_3d/no_trained/20151027203547'
+    dirs=[dir[:-7] for dir in os.listdir('/disk2/pascal_3d/PASCAL3D+_release1.0/Annotations') if dir.endswith('_pascal')];
+    layers=['pool5','fc6','fc7'];
+    degrees=[0,45,90,135,180];
+    delta=5;
+    caption_text=['Trained','Not Trained'];
+    replace=[out_dir_meta+'/',''];
+    degree=90;
+    for layer in layers:
+        out_file_html=os.path.join(out_dir_meta,layer+'_all_azimuths'+'.html')
+
+        img_paths=[];
+        caption_paths=[];
+        for dir in dirs:
+            
+
+            img_paths_row=[];
+            caption_paths_row=[];    
+
+            for idx,file_pre in enumerate([train_pre,non_train_pre]):        
+                curr_dir=os.path.join(file_pre+'_'+layer+'_all_azimuths');
+                im_file=os.path.join(curr_dir,dir+'_'+str(degree)+'_'+str(delta)+'_compress.png');
+                
+                img_paths_row.append(im_file.replace(replace[0],replace[1]));
+                caption_paths_row.append(caption_text[idx]+' '+layer+' '+dir);
+
+            img_paths.append(img_paths_row);
+            caption_paths.append(caption_paths_row);
+        
+        visualize.writeHTML(out_file_html,img_paths,caption_paths,height=400,width=400);
+        print out_file_html
+
+
+def script_createHistComparative():
+    out_dir_meta='/disk2/octoberExperiments/nn_performance_without_pascal/pascal_3d';
+    train_pre='/disk2/octoberExperiments/nn_performance_without_pascal/pascal_3d/trained/20151027204114'
+    non_train_pre='/disk2/octoberExperiments/nn_performance_without_pascal/pascal_3d/no_trained/20151027203547'
+    dirs=[dir[:-7] for dir in os.listdir('/disk2/pascal_3d/PASCAL3D+_release1.0/Annotations') if dir.endswith('_pascal')];
+    layers=['pool5','fc6','fc7'];
+    delta=5;
+    caption_text=['Trained','Not Trained'];
+    replace=[out_dir_meta+'/',''];
+    degree=0;
+    # train_files=[os.path.join(train_pre+'_'+layer+'_all_azimuths',dir+'_'+str(degree)+'_'+str(delta)+'_compress_data.p') for layer in layers for dir in dirs];
+    # non_train_files=[os.path.join(non_train_pre+'_'+layer+'_all_azimuths',dir+'_'+str(degree)+'_'+str(delta)+'_compress_data.p') for layer in layers for dir in dirs];
+    # for idx in range(len(train_files)):
+
+    combos=[(dir,layer) for dir in dirs for layer in layers];
+    out_file_html=os.path.join(out_dir_meta,'hist_by_degree_'+str(degree)+'_comparisons_compress.html');
+    img_paths=[];
+    captions=[];
+
+    for dir,layer in combos:
+
+        file_train=os.path.join(train_pre+'_'+layer+'_all_azimuths',dir+'_'+str(degree)+'_'+str(delta)+'_compress_data.p');
+        # train_files[idx];
+        file_non_train=os.path.join(non_train_pre+'_'+layer+'_all_azimuths',dir+'_'+str(degree)+'_'+str(delta)+'_compress_data.p');
+        # non_train_files[idx];
+
+        hists_train,bins_train=pickle.load(open(file_train,'rb'));
+        hists_non_train,bins_non_train=pickle.load(open(file_non_train,'rb'));
+        
+        mid_points_train=[bins_train[i]+bins_train[i+1]/float(2) for i in range(len(bins_train)-1)];
+        mid_points_non_train=[bins_non_train[i]+bins_non_train[i+1]/float(2) for i in range(len(bins_non_train)-1)];
+        
+        # dir=file_train[file_train.rindex('/')+1:];
+        # dir=dir[:dir.index('_')];
+        out_file_just_file=layer+'_'+dir+'_'+str(degree)+'_'+str(delta)+'.png'
+        out_file=os.path.join(out_dir_meta,out_file_just_file)
+        title=dir+' Comparison';
+        xlabel='Distance Rank';
+        ylabel='Frequency';
+
+        print out_file
+        img_paths.append([out_file_just_file]);
+        captions.append([dir+' '+layer]);
+
+        visualize.plotSimple(zip([mid_points_train,mid_points_non_train],[hists_train,hists_non_train]),out_file,title=title,xlabel=xlabel,ylabel=ylabel,legend_entries=['Trained','Non Trained'],loc=0);
+    visualize.writeHTML(out_file_html,img_paths,captions,width=400,height=400);
+        # return
+
+    # for layer in layers:
+    #     out_file_html=os.path.join(out_dir_meta,layer+'_all_azimuths'+'.html')
+
+    #     img_paths=[];
+    #     caption_paths=[];
+    #     for dir in dirs:
+            
+
+    #         img_paths_row=[];
+    #         caption_paths_row=[];    
+
+    #         for idx,file_pre in enumerate([train_pre,non_train_pre]):        
+    #             curr_dir=os.path.join(file_pre+'_'+layer+'_all_azimuths');
+    #             im_file=os.path.join(curr_dir,dir+'_'+str(degree)+'_'+str(delta)+'_compress.png');
+                
+    #             img_paths_row.append(im_file.replace(replace[0],replace[1]));
+    #             caption_paths_row.append(caption_text[idx]+' '+layer+' '+dir);
+
+    #         img_paths.append(img_paths_row);
+    #         caption_paths.append(caption_paths_row);
+        
+    #     visualize.writeHTML(out_file_html,img_paths,caption_paths,height=400,width=400);
+    #     print out_file_html
+
+
 def saveBBImages(path_to_im,path_to_anno,file_names,out_dir):
     curr_dict={};
     
@@ -246,13 +421,141 @@ def script_visualizePerformanceDifference():
     plt.savefig(out_file_diff);
 
 
+def getAzimuthInfo(im_paths,gt_labels,indices,azimuth):
+    diffs_all=[];
+    dists_all=[];
+    for r in range(indices.shape[0]):
+        gt_label=gt_labels[r];
+        gt_azi=azimuth[r];
+        diffs=[];
+        dists=[];
+        for c in range(indices.shape[1]):
+            pred_idx=indices[r,c];
+            pred_label=gt_labels[pred_idx]
+            pred_azi=azimuth[pred_idx];
+            if pred_label==gt_label:
+                diff=abs(gt_azi-pred_azi);
+                if diff>180:
+                    diff=(360-diff)%180;
+                diffs.append(diff);
+                dists.append(c);
+        diffs_all.append(diffs);
+        dists_all.append(dists);
+
+    return diffs_all,dists_all;
+
+def getPerClassInfo(gt_labels,diffs_all,dists_all):
+    gt_labels=np.array(gt_labels);
+    gt_labels_uni=np.unique(gt_labels);
+    diffs_dists_by_label=[];
+    for gt_label in gt_labels_uni:
+        idx_gt=np.where(gt_labels==gt_label)[0];
+        diffs_curr=[diffs_all[idx] for idx in idx_gt];
+        dists_curr=[dists_all[idx] for idx in idx_gt];
+        diffs_curr=np.array(diffs_curr);
+        diffs_curr=diffs_curr[:,:-1];
+        dists_curr=np.array(dists_curr);
+        dists_curr=dists_curr[:,:-1];
+        curr_combo=(diffs_curr,dists_curr);
+        diffs_dists_by_label.append(curr_combo);
+    return diffs_dists_by_label,gt_labels_uni
+
+def script_visualizePerClassAzimuthPerformance():
+    train_file='/disk2/octoberExperiments/nn_performance_without_pascal/pascal_3d/trained/20151027204114'
+    non_train_file='/disk2/octoberExperiments/nn_performance_without_pascal/pascal_3d/no_trained/20151027203547'
+    dirs=[dir[:-7] for dir in os.listdir('/disk2/pascal_3d/PASCAL3D+_release1.0/Annotations') if dir.endswith('_pascal')];
+    file_pres=[train_file,non_train_file];
+    layers=['pool5','fc6','fc7'];
+    for file_name in file_pres:
+        for layer in layers:
+            in_file=file_name+'_'+layer+'_all_azimuths.p';
+            print in_file
+            t=time.time();
+            [img_paths,gt_labels,azimuths,diffs_all,dists_all]=pickle.load(open(in_file,'rb'));
+            t=time.time()-t;
+            # print t;
+            diffs_dists_by_label,gt_labels_uni=getPerClassInfo(gt_labels,diffs_all,dists_all);
+
+            
+            out_dir=in_file[:-2];
+            if not os.path.exists(out_dir):
+                os.mkdir(out_dir);
+                
+            for idx_gt_label,gt_label in enumerate(gt_labels_uni):
+                diffs_curr,dists_curr=diffs_dists_by_label[idx_gt_label];
+                out_file=os.path.join(out_dir,dirs[gt_label]+'_data.p');
+                pickle.dump([diffs_curr,dists_curr],open(out_file,'wb'));
+
+                title=dirs[gt_label]+' Distances Versus Viewpoint Difference'
+                xlabel='Distance'
+                ylabel='Viewpoint Difference in Degree'
+
+                out_file=os.path.join(out_dir,dirs[gt_label]+'_compress.png');
+                visualize.createScatterOfDiffsAndDistances(diffs_curr,title,xlabel,ylabel,out_file);
+                out_file=os.path.join(out_dir,dirs[gt_label]+'_non_compress.png');
+                visualize.createScatterOfDiffsAndDistances(diffs_curr,title,xlabel,ylabel,out_file,dists_curr);
+
+
 def main():
+    script_createHistComparative()
+    # script_createHistDifferenceHTML()
+    # script_savePerClassPerDegreeHistograms()
+    return
+    script_visualizePerClassAzimuthPerformance();
+    return
     train_file='/disk2/octoberExperiments/nn_performance_without_pascal/pascal_3d/trained/20151027204114'
     non_train_file='/disk2/octoberExperiments/nn_performance_without_pascal/pascal_3d/no_trained/20151027203547'
     layers=['pool5','fc6','fc7'];
     path_to_anno='/disk2/pascal_3d/PASCAL3D+_release1.0/Annotations'
-    script_saveAzimuthInfo(train_file,path_to_anno);
-    script_saveAzimuthInfo(non_train_file,path_to_anno);
+
+    for file_name in [train_file,non_train_file]:
+        [img_paths,gt_labels,azimuths]=pickle.load(open(file_name+'_azimuths.p','rb'));
+        for layer in layers:
+            print layer;
+            file_name_l=file_name+'_'+layer+'_all';
+            out_file=file_name_l+'_azimuths.p';
+
+            t=time.time()
+            [img_paths,gt_labels,indices,_]=pickle.load(open(file_name_l+'.p','rb'));
+            t=time.time()-t
+            print t
+            # raw_input();
+            
+            diffs_all,dists_all=getAzimuthInfo(img_paths,gt_labels,indices,azimuths)
+            pickle.dump([img_paths,gt_labels,azimuths,diffs_all,dists_all],open(out_file,'wb'));
+
+    return    
+    text_labels=[dir[:-7] for dir in os.listdir(path_to_anno) if dir.endswith('pascal')];
+    for file_name in [train_file,non_train_file]:
+        [img_paths,gt_labels,azimuths]=pickle.load(open(file_name+'_azimuths.p','rb'));
+        for layer in layers:
+            print layer;
+            file_name_l=file_name+'_'+layer+'_all';
+            out_dir=file_name_l+'_azimuths';
+            if not os.path.exists(out_dir):
+                os.mkdir(out_dir);
+            t=time.time()
+            [img_paths,gt_labels,indices,_]=pickle.load(open(file_name_l+'.p','rb'));
+            t=time.time()-t
+            print t
+            # raw_input();
+            createAzimuthGraphs(img_paths,gt_labels,indices,azimuths,out_dir,text_labels)
+
+    for layer in layers:
+        print layer
+        out_file='/disk2/octoberExperiments/nn_performance_without_pascal/pascal_3d/azimuths_'+layer+'_all'+'_comparison.html';
+        rel_train='trained/20151027204114_'+layer+'_all'+'_azimuths'
+        rel_notrain='no_trained/20151027203547_'+layer+'_all'+'_azimuths';
+        out_dir='/disk2/octoberExperiments/nn_performance_without_pascal/pascal_3d/no_trained/20151027203547_'+layer+'_all'+'_azimuths'
+
+        im_paths=[[os.path.join(rel_train,file_curr),os.path.join(rel_notrain,file_curr)] for file_curr in os.listdir(out_dir) if file_curr.endswith('.jpg')];
+        
+        captions=[['train','no_train']]*len(im_paths);
+        visualize.writeHTML(out_file,im_paths,captions,height=500,width=500)
+
+
+    # script_saveAzimuthInfo(train_file,path_to_anno);
+    # script_saveAzimuthInfo(non_train_file,path_to_anno);
     # script_saveIndicesAll(train_file,layers)
     # script_saveIndicesAll(non_train_file,layers)
 

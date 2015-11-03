@@ -110,6 +110,82 @@ def script_createHistDifferenceHTML():
         visualize.writeHTML(out_file_html,img_paths,caption_paths,height=400,width=400);
         print out_file_html
 
+def script_createHistsWithSpecificAngleHtml():
+    out_dir_meta='/disk2/octoberExperiments/nn_performance_without_pascal/pascal_3d';
+    train_pre='/disk2/octoberExperiments/nn_performance_without_pascal/pascal_3d/trained/20151027204114'
+    non_train_pre='/disk2/octoberExperiments/nn_performance_without_pascal/pascal_3d/no_trained/20151027203547'
+    dirs=[dir[:-7] for dir in os.listdir('/disk2/pascal_3d/PASCAL3D+_release1.0/Annotations') if dir.endswith('_pascal')];
+    layers=['pool5','fc6','fc7'];
+    deg_to_see=0;
+    degree=90;
+    delta=5;
+
+    out_file_html=os.path.join('/disk2/octoberExperiments/nn_performance_without_pascal/pascal_3d','hist_angle_restrict_'+str(deg_to_see)+'_'+str(degree)+'_comparison_non_compress.html');
+    replace=['/disk2/octoberExperiments/nn_performance_without_pascal/pascal_3d/',''];
+
+    img_paths=[];
+    captions=[];
+    for dir in dirs:
+        for layer in layers:
+            single_row=[];
+            single_row_caption=[];
+            for caption_curr,file_pre in [('Trained',train_pre),('Not trained',non_train_pre)]:
+                curr_dir=file_pre+'_'+layer+'_all_azimuths'
+                img_path=os.path.join(curr_dir,dir+'_'+str(deg_to_see)+'_'+str(degree)+'_'+str(delta)+'_non_compress.png');
+                img_path=img_path.replace(replace[0],replace[1]);
+                single_row.append(img_path);
+                single_row_caption.append(caption_curr+' '+dir+' '+layer);
+            img_paths.append(single_row);
+            captions.append(single_row_caption);
+
+    visualize.writeHTML(out_file_html,img_paths,captions,height=300,width=400)
+
+
+def script_createHistsWithSpecificAngle():
+    out_dir_meta='/disk2/octoberExperiments/nn_performance_without_pascal/pascal_3d';
+    train_pre='/disk2/octoberExperiments/nn_performance_without_pascal/pascal_3d/trained/20151027204114'
+    non_train_pre='/disk2/octoberExperiments/nn_performance_without_pascal/pascal_3d/no_trained/20151027203547'
+    dirs=[dir[:-7] for dir in os.listdir('/disk2/pascal_3d/PASCAL3D+_release1.0/Annotations') if dir.endswith('_pascal')];
+    layers=['pool5','fc6','fc7'];
+    deg_to_see=0;
+    degree=90;
+    delta=5;
+
+    for file_pre in [train_pre,non_train_pre]:
+        azimuth_file=file_pre+'_azimuths.p';
+        for dir in dirs:
+            # dir='car';
+            for layer in layers:
+                # ='fc7';
+                
+                curr_dir=file_pre+'_'+layer+'_all_azimuths'
+                class_data_file=os.path.join(curr_dir,dir+'_data.p');
+                [img_paths,gt_labels,azimuths]=pickle.load(open(azimuth_file,'rb'));
+                [diffs_all,dists_all]=pickle.load(open(class_data_file,'rb'));
+                idx=np.array(gt_labels);
+                idx=np.where(idx==dirs.index(dir))[0];
+                azimuths_rel=np.array(azimuths);
+                azimuths_rel=azimuths_rel[idx];
+                idx_deg=np.where(azimuths_rel==deg_to_see)[0];
+                diffs_curr=diffs_all[idx_deg,:];
+                dists_curr=dists_all[idx_deg,:]
+
+                print diffs_curr.shape
+                print dists_curr.shape
+
+                out_file=os.path.join(curr_dir,dir+'_'+str(deg_to_see)+'_'+str(degree)+'_'+str(delta)+'_compress.png');
+                                # # print out_file
+                title=dir+' with angle '+str(deg_to_see)+' with '+str(degree)+' difference'
+                visualize.plotDistanceHistograms(diffs_curr,degree,out_file,title=title,delta=delta,dists_curr=None,bins=10,normed=True)
+                hists,bin_edges=getDistanceHistograms(diffs_curr,degree,delta=delta,dists_curr=None,bins=10,normed=True);
+                pickle.dump([hists,bin_edges],open(out_file[:-2],'wb'));
+
+                out_file=os.path.join(curr_dir,dir+'_'+str(deg_to_see)+'_'+str(degree)+'_'+str(delta)+'_non_compress.png');
+                visualize.plotDistanceHistograms(diffs_curr,degree,out_file,title=title,delta=delta,dists_curr=dists_curr,bins=10,normed=True)
+                hists,bin_edges=getDistanceHistograms(diffs_curr,degree,delta=delta,dists_curr=dists_curr,bins=10,normed=True);
+                pickle.dump([hists,bin_edges],open(out_file[:-2],'wb'));
+
+                
 
 def script_createHistComparative():
     out_dir_meta='/disk2/octoberExperiments/nn_performance_without_pascal/pascal_3d';
@@ -120,7 +196,8 @@ def script_createHistComparative():
     delta=5;
     caption_text=['Trained','Not Trained'];
     replace=[out_dir_meta+'/',''];
-    degree=0;
+    degree=90;
+    deg_to_see=0;
     # train_files=[os.path.join(train_pre+'_'+layer+'_all_azimuths',dir+'_'+str(degree)+'_'+str(delta)+'_compress_data.p') for layer in layers for dir in dirs];
     # non_train_files=[os.path.join(non_train_pre+'_'+layer+'_all_azimuths',dir+'_'+str(degree)+'_'+str(delta)+'_compress_data.p') for layer in layers for dir in dirs];
     # for idx in range(len(train_files)):
@@ -151,11 +228,12 @@ def script_createHistComparative():
         xlabel='Distance Rank';
         ylabel='Frequency';
 
-        print out_file
+        # print out_file
         img_paths.append([out_file_just_file]);
         captions.append([dir+' '+layer]);
 
         visualize.plotSimple(zip([mid_points_train,mid_points_non_train],[hists_train,hists_non_train]),out_file,title=title,xlabel=xlabel,ylabel=ylabel,legend_entries=['Trained','Non Trained'],loc=0);
+    print out_file_html
     visualize.writeHTML(out_file_html,img_paths,captions,width=400,height=400);
         # return
 
@@ -497,6 +575,9 @@ def script_visualizePerClassAzimuthPerformance():
 
 
 def main():
+    script_createHistComparative();
+    # script_createHistsWithSpecificAngle()
+    return
     script_createHistComparative()
     # script_createHistDifferenceHTML()
     # script_savePerClassPerDegreeHistograms()

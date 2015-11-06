@@ -10,7 +10,7 @@ import glob
 import script_nearestNeigbourExperiment
 import cPickle as pickle;
 import matplotlib.pyplot as plt;
-
+from pascal3d_db import Pascal3D, Pascal3D_Manipulator
 import time;
 
 def script_savePerClassPerDegreeHistograms():
@@ -325,9 +325,57 @@ def script_saveIndicesAll(file_name,layers):
     numberOfN=None;
     for layer in layers:
         print layer
-        file_name_l=file_name+'_'+layer+'_all';
-        indices,conf_matrix=script_nearestNeigbourExperiment.doNN(img_paths,gt_labels,vals[layer],numberOfN=numberOfN,distance='cosine',algo='brute')
-        pickle.dump([img_paths,gt_labels,indices,conf_matrix],open(file_name_l+'.p','wb'));
+        file_name_l=file_name+'_'+layer+'_distances_all';
+        # indices,conf_matrix=script_nearestNeigbourExperiment.doNN(img_paths,gt_labels,vals[layer],numberOfN=numberOfN,distance='cosine',algo='brute')
+        # pickle.dump([img_paths,gt_labels,indices,conf_matrix],open(file_name_l+'.p','wb'));
+
+        indices,distances=script_nearestNeigbourExperiment.doNN(img_paths,gt_labels,vals[layer],numberOfN=numberOfN,distance='cosine',algo='brute',distances_return=True)
+        pickle.dump([img_paths,gt_labels,indices,distances],open(file_name_l+'.p','wb'));
+
+
+def script_populateDB(db_file,file_pre,trainFlag,layers,class_ids,caffe_model):
+    exception_bool_all=[];
+    mani=Pascal3D_Manipulator('sqlite:////'+db_file);
+    mani.openSession();
+    for layer in layers:
+        exception_bool=[];
+        file_name_l=file_pre+'_'+layer+'_distances_all.p';
+        print file_name_l
+        t=time.time();
+        [img_paths,gt_labels,indices,distances]=pickle.load(open(file_name_l,'rb'));
+        # img_paths=range(10000);
+        print time.time()-t
+
+        for idx in range(len(img_paths)):
+            if idx%100==0:
+                print idx
+            nn_timestamp=file_pre[file_pre.rindex('/')+1:]
+            
+            # print 'idx',idx
+            # print 'img_paths[idx]',img_paths[idx]
+            # print 'layer',layer
+            # print 'nn_timestamp',nn_timestamp
+            # print 'class_ids[gt_labels[idx]]',class_ids[gt_labels[idx]]
+            # print 'gt_labels[idx]',gt_labels[idx]
+            # print 'caffe_model',caffe_model
+            # print 'indices[idx]',indices[idx].shape
+            # print 'distances[idx]',distances[idx].shape
+            # print 'trainFlag',trainFlag
+
+        #     break;
+        # break;
+            # try:
+            mani.insert(idx,img_paths[idx],layer,nn_timestamp,class_ids[gt_labels[idx]],gt_labels[idx],caffe_model, neighbor_index=indices[idx],neighbor_distance=distances[idx],trainedClass=trainFlag)
+            # mani.insert();
+                # raise Exception('fun');
+            # except:
+            #     exception_bool.append(idx);
+            #     print idx,'EXCEPTION!'
+        exception_bool_all.append(exception_bool);
+    mani.closeSession();
+
+    return exception_bool_all
+
 
 def getCoarseAzimuth(file_name,obj_index):
     curr_dict=scipy.io.loadmat(file_name,squeeze_me=True, struct_as_record=False);
@@ -574,7 +622,90 @@ def script_visualizePerClassAzimuthPerformance():
                 visualize.createScatterOfDiffsAndDistances(diffs_curr,title,xlabel,ylabel,out_file,dists_curr);
 
 
+def script_saveNNDistances(file_name,layers):
+    test_set,_=pickle.load(open(file_name+'.p','rb'));
+    vals=np.load(file_name+'.npz');
+
+    test_set=sorted(test_set,key=lambda x: x[0])
+    test_set=zip(*test_set);
+    
+    img_paths=list(test_set[0]);
+    gt_labels=list(test_set[1]);
+    
+    numberOfN=None;
+    for layer in layers:
+        file_name_l=file_name+'_'+layer+'_all_distances';
+        indices,conf_matrix=script_nearestNeigbourExperiment.doNN(img_paths,gt_labels,vals[layer],numberOfN=numberOfN,distance='cosine',algo='brute',conf_matrix=False,distances=True)
+
+        pickle.dump([img_paths,gt_labels,indices,conf_matrix],open(file_name_l+'.p','wb'));
+
+
+def script_testingDoNN():
+    img_paths=[];
+    numberOfSamples=100;
+    featureVectorLength=10;
+    numberOfClasses=5;
+    gt_labels=np.random.random_integers(0,numberOfClasses-1,(numberOfSamples,));
+    
+    features_curr=np.random.random_integers(-100,100,(numberOfSamples,featureVectorLength));
+    features_curr=np.array(features_curr,dtype=float);
+    numberOfN=5;
+    
+    indices=script_nearestNeigbourExperiment.doNN(img_paths,gt_labels,features_curr,numberOfN=numberOfN)    
+    print indices.shape==(numberOfSamples,numberOfN);
+    
+    numberOfN=None
+    indices=script_nearestNeigbourExperiment.doNN(img_paths,gt_labels,features_curr,numberOfN=numberOfN)
+    print indices.shape==(numberOfSamples,numberOfSamples);
+    
+    indices,conf_matrix=script_nearestNeigbourExperiment.doNN(img_paths,gt_labels,features_curr,numberOfN=numberOfN,conf_matrix_return=True)
+    print conf_matrix.shape==(numberOfClasses,numberOfClasses)
+    
+    indices,distances=script_nearestNeigbourExperiment.doNN(img_paths,gt_labels,features_curr,numberOfN=numberOfN,conf_matrix_return=False,distances_return=True)
+    print distances.shape==indices.shape==(numberOfSamples,numberOfSamples);
+
+    indices,conf_matrix,distances=script_nearestNeigbourExperiment.doNN(img_paths,gt_labels,features_curr,numberOfN=numberOfN,conf_matrix_return=True,distances_return=True)
+    print conf_matrix.shape==(numberOfClasses,numberOfClasses)
+    print distances.shape==indices.shape==(numberOfSamples,numberOfSamples);
+    plt.figure();
+    plt.plot(distances[0]);
+    plt.plot(distances[numberOfSamples-1]);
+    plt.savefig('/disk2/temp/checkNN.png');
+    plt.close();
+    
 def main():
+    train_file='/disk2/octoberExperiments/nn_performance_without_pascal/pascal_3d/trained/20151027204114'
+    non_train_file='/disk2/octoberExperiments/nn_performance_without_pascal/pascal_3d/no_trained/20151027203547'
+    layers=['pool5','fc6','fc7'];
+    out_dir='/disk2/octoberExperiments/nn_pascal3d'
+    db_file=os.path.join(out_dir,'nn_pascal3d_new.db');
+    if not os.path.exists(out_dir):
+        os.mkdir(out_dir);
+
+    path_to_anno='/disk2/pascal_3d/PASCAL3D+_release1.0/Annotations';
+    class_ids=[dir[:-7] for dir in os.listdir(path_to_anno) if dir.endswith('pascal')];
+
+    file_pre=train_file
+    trainFlag=True
+    caffe_model='/home/maheenrashid/Downloads/caffe/caffe-rc2/models/bvlc_reference_caffenet/bvlc_reference_caffenet.caffemodel'
+    
+    # exceptions=script_populateDB(db_file,file_pre,trainFlag,layers,class_ids,caffe_model)
+    # for ex in exceptions:
+    #     print len(ex)
+    # pickle.dump([exceptions],open(file_pre+'_db_exceptions.p','wb'));
+
+    file_pre=non_train_file
+    trainFlag=False
+    caffe_model='/disk2/octoberExperiments/nn_performance_without_pascal/snapshot_iter_450000.caffemodel'
+    script_populateDB(db_file,file_pre,trainFlag,layers,class_ids,caffe_model)
+
+    return
+    script_saveIndicesAll(train_file,layers);
+    script_saveIndicesAll(non_train_file,layers);
+    # script_testingDoNN();
+
+
+    return
     script_createHistComparative();
     # script_createHistsWithSpecificAngle()
     return

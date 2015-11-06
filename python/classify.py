@@ -22,7 +22,7 @@ def main(argv):
     # Required arguments: input and output files.
     parser.add_argument(
         "input_file",
-        help="Input image, directory, or npy."
+        help="Input image, directory, npy, or text file with paths."
     )
     parser.add_argument(
         "output_file",
@@ -124,6 +124,12 @@ def main(argv):
         file_list=[im_f for im_f in glob.glob(args.input_file + '/*.' + args.ext)];
         file_list.sort();
         inputs =[caffe.io.load_image(im_f) for im_f in file_list]
+    elif args.input_file.endswith('txt'):
+        with open(args.input_file,'rb') as f:
+            file_list=f.readlines();
+        file_list=[f.strip('\n') for f in file_list if f.strip('\n').endswith(args.ext)];
+        file_list.sort();
+        inputs =[caffe.io.load_image(im_f) for im_f in file_list]
     else:
         inputs = [caffe.io.load_image(args.input_file)]
 
@@ -149,8 +155,6 @@ def main(argv):
         out['predictions']=predictions
         np.savez_compressed(args.output_file,**out)
         print out.keys(),' saved to ',args.output_file
-    
-
 
 if __name__ == '__main__':
     main(sys.argv)

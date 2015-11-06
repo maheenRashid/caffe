@@ -21,12 +21,11 @@ import matplotlib.pyplot as plt;
 import math;
 import glob;
 
-def doNN(img_paths,gt_labels,features_curr,numberOfN=5,distance='cosine',algo='brute',binarize=False): 
+def doNN(img_paths,gt_labels,features_curr,numberOfN=5,distance='cosine',algo='brute',binarize=False,conf_matrix_return=False,distances_return=False): 
     gt_labels_uni=list(set(gt_labels));
     gt_labels_uni.sort();
 
-    conf_matrix=np.zeros((len(gt_labels_uni),len(gt_labels_uni)));
-
+    
     feature_len=1;
     for dim_val in list(features_curr.shape)[1:]:
         feature_len *= dim_val
@@ -38,20 +37,37 @@ def doNN(img_paths,gt_labels,features_curr,numberOfN=5,distance='cosine',algo='b
     features_curr=sklearn.preprocessing.normalize(features_curr, norm='l2', axis=1);
 
     distances=np.dot(features_curr,features_curr.T);
-    np.fill_diagonal(distances,0.0);
+    np.fill_diagonal(distances,-1*float('Inf'));
 
     indices=np.argsort(distances, axis=1)[:,::-1]
+    # print indices[:,-1]
+    static_indices=np.indices(distances.shape);
+    distances=distances[static_indices[0],indices]
+
     if numberOfN is not None:
         indices=indices[:,:numberOfN];
+        distances=distances[:,:numberOfN];
 
-    
-    # for row in range(indices.shape[0]):
-    #     for col in range(len(indices[0])):
-    #             gt_label=gt_labels[row];
-    #             pred_label=gt_labels[indices[row,col]];
-    #             conf_matrix[gt_labels_uni.index(gt_label),gt_labels_uni.index(pred_label)]+=1;
     conf_matrix=0;
-    return indices, conf_matrix;
+    if conf_matrix_return:
+        conf_matrix=np.zeros((len(gt_labels_uni),len(gt_labels_uni)));
+        for row in range(indices.shape[0]):
+            for col in range(len(indices[0])):
+                gt_label=gt_labels[row];
+                pred_label=gt_labels[indices[row,col]];
+                conf_matrix[gt_labels_uni.index(gt_label),gt_labels_uni.index(pred_label)]+=1;
+    
+    to_return=[indices];
+    if conf_matrix_return:
+        to_return.append(conf_matrix)
+    if distances_return:
+        to_return.append(distances)
+    if len(to_return)==1:
+        to_return=to_return[0];
+    return to_return
+
+
+
 
 
 def randomlySelectTestSet(path_to_val,val_gt_file,no_classes=50,no_im=5):

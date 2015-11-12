@@ -101,6 +101,15 @@ def plotDistanceHistograms(diffs_curr,degree,out_file,title='',xlabel='Distance 
     plt.savefig(out_file);
     plt.close();
 
+def hist(dists,out_file,bins=10,normed=True,xlabel='Value',ylabel='Frequency',title=''):
+    plt.figure();
+    plt.hist(dists,bins,normed=normed);
+    plt.title(title);
+    plt.xlabel(xlabel);
+    plt.ylabel(ylabel);
+    plt.savefig(out_file);
+    plt.close();    
+
 def plotErrorBars(dict_to_plot,x_lim,y_lim,xlabel,y_label,title,out_file,margin=[0.05,0.05],loc=2):
     
     plt.title(title);

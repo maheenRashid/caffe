@@ -10,6 +10,7 @@ from collections import namedtuple
 import collections
 import visualize
 import util;
+import experiments_super;
 
 def getObjectStruct(file_name,object_idx):
     curr_dict=scipy.io.loadmat(file_name,squeeze_me=True, struct_as_record=False);
@@ -242,21 +243,6 @@ def getIndexWithAngleDifference(azimuth_differences,diff,delta):
     return idx_of_interest;
 
 
-def sortBySmallestDistanceRank(indices_interest,neighbor_index):
-    
-    
-    indices_interest_index=util.getIndexingArray(neighbor_index,indices_interest);
-    indices_interest_index=np.array(indices_interest_index);
-    
-    idx_to_order=np.argsort(indices_interest_index);
-    
-    indices_interest_index=indices_interest_index[idx_to_order];
-
-    indices_ordered=indices_interest[idx_to_order];
-    
-    nn_rank=neighbor_index[indices_interest_index]
-    return indices_interest_index,idx_to_order
-
 def getImgInfoSameClass(db_path,class_id,trainFlag,layer):
     mani=Pascal3D_Manipulator(db_path);
     mani.openSession();
@@ -366,7 +352,7 @@ def script_visualizeRankDifferenceAsHist(params):
             params = params._replace(class_id=class_id)
             params = params._replace(layer=layer)
             output=getNNRankComparisonInfo(params);
-            indices_difference=getDifferenceInRank(output['img_paths_nn_train'],
+            indices_difference=experiments_super.getDifferenceInRank(output['img_paths_nn_train'],
                                                 output['img_paths_nn_no_train'],
                                                 output['nn_rank_train'],
                                                 output['nn_rank_no_train']);
@@ -395,23 +381,6 @@ def script_visualizeRankDifferenceAsHist(params):
     visualize.writeHTML(out_file_html,img_paths_html,captions,params.height_width[0],params.height_width[1]);
 
 
-
-
-def getDifferenceInRank(img_paths_train,img_paths_no_train,nn_rank_train,nn_rank_no_train):
-    indices_difference=[];
-    for idx,img_path_train_curr in enumerate(img_paths_train):
-        indices_difference_curr=[];
-        img_path_no_train_curr=img_paths_no_train[idx];
-        for idx_curr,img_path_curr in enumerate(img_path_train_curr):
-            n_idx_train=nn_rank_train[idx][idx_curr];
-            idx_temp=img_path_no_train_curr.index(img_path_curr);
-            n_idx_no_train=nn_rank_no_train[idx][idx_temp];
-            indices_difference_curr.append(n_idx_train-n_idx_no_train);
-        indices_difference.append(indices_difference_curr);
-
-    # indices_difference=np.array(indices_difference);
-    return indices_difference
-
 def getImgPathsAndRanksSorted(rows,db_path,class_id,diff,delta,trainFlag,layer):
     
     rows_same_class=getImgInfoSameClass(db_path,class_id,trainFlag,layer)
@@ -427,7 +396,7 @@ def getImgPathsAndRanksSorted(rows,db_path,class_id,diff,delta,trainFlag,layer):
         azimuth_differences[idx_to_del]=-1*float('Inf');
         idx_of_interest=getIndexWithAngleDifference(azimuth_differences,diff,delta)
         indices=np.array(indices);
-        nn_rank,idx_to_order=sortBySmallestDistanceRank(indices[idx_of_interest],neighbor_index);
+        nn_rank,idx_to_order=experiments_super.sortBySmallestDistanceRank(indices[idx_of_interest],neighbor_index);
         img_paths_sorted=np.array(img_paths)[idx_of_interest][idx_to_order];
  
         img_paths_all.append(list(img_paths_sorted));
@@ -436,195 +405,9 @@ def getImgPathsAndRanksSorted(rows,db_path,class_id,diff,delta,trainFlag,layer):
     return img_paths_all,nn_ranks_all
 
 def main():
-
     params_file='/disk2/octoberExperiments/nn_pascal3d/full_image_nn/all_pascal_new_experiment_meta.p'
     params_dict,_=pickle.load(open(params_file,'rb'));
-    # out_dir='/disk2/octoberExperiments/nn_pascal3d/full_image_nn'
-    # db_path_out=params_dict['db_path_out'];
-    
-    out_dir='/disk2/octoberExperiments/nn_pascal3d/patches_nn'
-    if not os.path.exists(out_dir):
-        os.mkdir(out_dir);
-    db_path_out='sqlite://///disk2/octoberExperiments/nn_pascal3d/nn_pascal3d_new.db'
-    
-    params_dict_new={};
-    params_dict_new['db_path']=db_path_out
-    params_dict_new['class_id']=params_dict['class_id']
-    params_dict_new['angle']=None
-    params_dict_new['diff']=90.0
-    params_dict_new['delta']=5.0
-    params_dict_new['layer']=params_dict['layers']
-    params_dict_new['out_file_pre']=os.path.join(out_dir,'rankDifferenceHist');
-    params_dict_new['bins']=20;
-    params_dict_new['normed']=True
-    params_dict_new['out_file_html']=os.path.join(out_dir,'rankDifferenceHist_'+str(params_dict_new['angle'])+'_'+str(params_dict_new['diff'])+'_'+str(params_dict_new['delta'])+'_all.html');
-    params_dict_new['rel_path']=['/disk2','../../../..']
-    params_dict_new['height_width']=[300,300];
-    
-    
-    params=createParams('visualizeRankDifferenceByAngleHist');
-    params=params(**params_dict_new)
-    
-    script_visualizeRankDifferenceAsHist(params)
-    return
-    params_file='/disk2/octoberExperiments/nn_pascal3d/seeingPatches/car_0.0_90.0_5.0_fc7.html_meta_experiment.p'
-    params_dict=pickle.load(open(params_file,'rb'));
-    params_dict['db_path']='sqlite://///disk2/octoberExperiments/nn_pascal3d/full_image_nn_new.db'
-
-    createParams('visualizeRankDifferenceByAngleHist')
-    
-    params=createParams('visualizeRankDifferenceByAngle');
-    params=params(**params_dict);
-
-    output=getNNRankComparisonInfo(params);
-    
-    img_paths_test = output['img_paths_test']
-    img_paths_train = output['img_paths_nn_train']
-    img_paths_no_train = output['img_paths_nn_no_train']
-    nn_rank_train = output['nn_rank_train']
-    nn_rank_no_train = output['nn_rank_no_train']
-
-    #take the difference in positions
-    indices_difference=[];
-    for idx,img_path_train_curr in enumerate(img_paths_train):
-        indices_difference_curr=[];
-        img_path_no_train_curr=img_paths_no_train[idx];
-        for idx_curr,img_path_curr in enumerate(img_path_train_curr):
-            n_idx_train=nn_rank_train[idx][idx_curr];
-            idx_temp=img_path_no_train_curr.index(img_path_curr);
-            n_idx_no_train=nn_rank_no_train[idx][idx_temp];
-            indices_difference_curr.append(n_idx_train-n_idx_no_train);
-        indices_difference.append(indices_difference_curr);
-
-    indices_difference=np.array(indices_difference);
-    
-    #plot a histogram
-    import matplotlib.pyplot as plt
-    plt.figure();
-    plt.hist(indices_difference.ravel(),bins=20,normed=True);
-    plt.savefig('/disk2/temp/check_diff_'+params.layer+'.png');
-    plt.close();
-
-    return
-    params_file='/disk2/octoberExperiments/nn_pascal3d/full_image_nn/all_pascal_new_experiment_meta.p'
-    params_dict,_=pickle.load(open(params_file,'rb'));
-    class_id='car'
-    trainFlag=False
-    db_path=params_dict['db_path_out']
-    layer='fc7';
-
-    mani=Pascal3D_Manipulator(db_path);
-    mani.openSession();
-    criterion=(Pascal3D.class_id==class_id,Pascal3D.layer==layer,Pascal3D.trainedClass==trainFlag)
-    toSelect=(Pascal3D.idx,Pascal3D.neighbor_index,Pascal3D.neighbor_distance,Pascal3D.azimuth_differences);
-    rows=mani.select(toSelect,criterion,distinct=True)
-    rows=sorted(rows,key=lambda x: x[0])
-
-    indices,neighbor_index_all,neighbor_distance_all,azimuth_differences_all=zip(*rows)
-
-    neighbor_index_all=np.array(neighbor_index_all);
-    azimuth_differences_all=np.array(azimuth_differences_all);
-    neighbor_distance_all=np.array(neighbor_distance_all);
-    print neighbor_index_all.shape,azimuth_differences_all.shape
-
-    azimuth_arr=-float('Inf')*np.ones(neighbor_index_all.shape);
-    # float('Inf')
-    for idx in range(neighbor_index_all.shape[0]):
-        azimuth_differences_curr=np.delete(azimuth_differences_all[idx],[idx])
-        index_for_azimuth=util.getIndexingArray(neighbor_index_all[idx],np.delete(indices,[idx]));
-        azimuth_arr[idx,index_for_azimuth]=azimuth_differences_curr
-    
-    print azimuth_arr.shape
-    # hists,bin_edges=getAzimuthHistogram(azimuth_arr,diff,delta);    
-    diff=0.0;
-    delta=5;
-    bins=10;
-    normed=True;
-    x,y=np.where(np.logical_and(diff-delta<=azimuth_arr,azimuth_arr<=diff+delta))
-
-    print y.shape
-    print x[:10];
-    print y[:10];
-
-    import matplotlib.pyplot as plt
-    plt.figure();
-    plt.hist(y,bins,normed=normed);
-    plt.savefig('/disk2/temp/check_'+str(trainFlag)+'.png');
-    
-    # distances=neighbor_distance_all[x,y];
-    # print distances.shape
-    # # print distances
-    # hist,bin_edges=np.histogram(distances);
-
-
-
-
-    return
-    db_path='sqlite://///disk2/octoberExperiments/nn_pascal3d/full_image_nn.db'
-    class_id='car'
-    import matplotlib.pyplot as plt
-    for trainFlag in [True,False]:
-        for layer in ['pool5','fc6','fc7']:
-            # trainFlag=True;
-            # layer='pool5';
-            # rows_same_class=getImgInfoSameClass(db_path,class_id,trainFlag,layer)
-            # indices,_=zip(*rows_same_class);
-
-            # neighbor_index_all=[];
-            mani=Pascal3D_Manipulator(db_path);
-            mani.openSession();
-            
-            rows=mani.select((Pascal3D.idx,Pascal3D.azimuth_differences,Pascal3D.neighbor_index,Pascal3D.neighbor_distance),(Pascal3D.class_id==class_id,Pascal3D.trainedClass==trainFlag,Pascal3D.layer==layer));
-            mani.closeSession()
-            
-            rows=sorted(rows,key=lambda x: x[0])
-
-            indices,azimuth_differences_all,neighbor_index_all,neighbor_distance_all=zip(*rows)
-
-            neighbor_index_all=np.array(neighbor_index_all);
-            azimuth_differences_all=np.array(azimuth_differences_all);
-            neighbor_distance_all=np.array(neighbor_distance_all);
-            print neighbor_index_all.shape,azimuth_differences_all.shape
-
-            azimuth_arr=-1*np.ones(neighbor_index_all.shape);
-            for idx in range(neighbor_index_all.shape[0]):
-                azimuth_differences_curr=np.delete(azimuth_differences_all[idx],[idx])
-                index_for_azimuth=util.getIndexingArray(neighbor_index_all[idx],np.delete(indices,[idx]));
-                azimuth_arr[idx,index_for_azimuth]=azimuth_differences_curr
-            
-            # hists,bin_edges=getAzimuthHistogram(azimuth_arr,diff,delta);    
-            diff=90;
-            delta=5;
-            x,y=np.where(np.logical_and(diff-delta<=azimuth_arr,azimuth_arr<=diff+delta))
-            distances=neighbor_distance_all[x,y];
-            print distances.shape
-            # print distances
-            hist,bin_edges=np.histogram(distances);
-
-            out_file='/disk2/temp/'+str(trainFlag)+'_'+layer+'.png'
-            plt.hist(distances,bins=np.arange(0.0,1.0,0.1),normed=True);
-            # plt.plot(hist,bin_edges[:-1]);
-            # plt.title(title);
-            # plt.xlabel(xlabel);
-            # plt.ylabel(ylabel);
-            plt.savefig(out_file);
-            plt.close();
-    
-
-
-
-
-
-
-
-
-
-
-    
-
-    
-
-    
+    print params_dict['class_id']
 
 if __name__=='__main__':
     main();

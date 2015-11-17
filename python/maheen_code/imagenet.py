@@ -11,6 +11,7 @@ IMAGE_URLS='http://www.image-net.org/api/text/imagenet.synset.geturls?wnid=';
 IS_A='http://www.image-net.org/archive/wordnet.is_a.txt';
 SUBSYNSET=['http://www.image-net.org/api/text/wordnet.structure.hyponym?wnid=','&full=1'];
 
+
 def selectTestIdsNotTrained(ids,image_counts,noClasses,no_im=0,val_ids=None,parent_child=None):
 	if parent_child is None:
 		parent_child=getIsARelationships();		
@@ -156,7 +157,7 @@ def writeNewDataClassFile(new_file_val,im_and_class,shuffle=True):
 			f.write(str_to_write);
 	return classes_uni
 
-def selectTestSetByID(val_gt_file,list_of_ids,path_to_val=None,random=False,max_num=None):
+def selectTestSetByID(val_gt_file,list_of_ids,path_to_val=None,chooseRandom=False,max_num=None):
     im_list,gt_classes=zip(*readLabelsFile(val_gt_file));
     gt_classes=makeIdIntoInt(list(gt_classes));
     
@@ -172,7 +173,7 @@ def selectTestSetByID(val_gt_file,list_of_ids,path_to_val=None,random=False,max_
         else:
         	no_im=min(max_num,len(idx_rand_class));
 
-        if random:
+        if chooseRandom:
 			idx_chosen=random.sample(idx_rand_class,no_im);        	
         else:
         	idx_chosen=idx_rand_class[:no_im];
@@ -185,7 +186,38 @@ def selectTestSetByID(val_gt_file,list_of_ids,path_to_val=None,random=False,max_
 
     return zip(im_list_chosen,gt_class_chosen);
 
+def getMappingInfo(list_files,synset_words,val_gt_file):
+    list_files=[file_curr[file_curr.rindex('/')+1:] for file_curr in list_files];
+
+    imagenet_ids=readLabelsFile(synset_words);
+    imagenet_labels=list(zip(*imagenet_ids)[1]);
+    imagenet_ids=list(zip(*imagenet_ids)[0]);
+    
+    val_data=readLabelsFile(val_gt_file)
+    im_paths=list(zip(*val_data)[0]);
+    imagenet_idx=list(zip(*val_data)[1]);
+    imagenet_idx=[int(imagenet_idx_curr) for imagenet_idx_curr in imagenet_idx];
+    im_paths=np.array(im_paths);
+
+    imagenet_idx_mapped=[];
+    imagenet_ids_mapped=[];
+    imagenet_labels_mapped=[];
+    for file_curr in list_files:
+        idx_map=np.where(im_paths==file_curr)[0][0];
+        imagenet_idx_curr=imagenet_idx[idx_map];
+        imagenet_id_curr=imagenet_ids[imagenet_idx_curr];
+        imagenet_label_curr=imagenet_labels[imagenet_idx_curr];
+
+        imagenet_idx_mapped.append(imagenet_idx_curr);
+        imagenet_labels_mapped.append(imagenet_label_curr);
+        imagenet_ids_mapped.append(imagenet_id_curr);
+
+    return imagenet_idx_mapped,imagenet_ids_mapped,imagenet_labels_mapped
+
+
+
 def main():
+
 	print 'hello. running imagenet'
 
 if __name__=='__main__':

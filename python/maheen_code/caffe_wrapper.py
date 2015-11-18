@@ -8,6 +8,9 @@ def saveFeaturesOfLayers(in_file,path_to_classify,gpu_no,layers,ext='JPEG',centr
     
     if out_file is None:
         out_file= time.strftime("%Y%m%d%H%M%S");
+    
+    if ext is None:
+        ext=str(None);
 
     command=[os.path.join(path_to_classify,'classify.py'),in_file,out_file,'--ext',ext,'--gpu',str(gpu_no),'--layer']+layers;
 

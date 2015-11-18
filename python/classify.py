@@ -127,7 +127,10 @@ def main(argv):
     elif args.input_file.endswith('txt'):
         with open(args.input_file,'rb') as f:
             file_list=f.readlines();
-        file_list=[f.strip('\n') for f in file_list if f.strip('\n').endswith(args.ext)];
+        if args.ext=='None':
+            file_list=[f.strip('\n') for f in file_list]
+        else:
+            file_list=[f.strip('\n') for f in file_list if f.strip('\n').endswith(args.ext)];
         inputs =[caffe.io.load_image(im_f) for im_f in file_list]
     else:
         inputs = [caffe.io.load_image(args.input_file)]

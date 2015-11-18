@@ -114,18 +114,28 @@ class Imagenet_Manipulator(object):
             arr=None
         return arr
 
-    def select(self,toSelect,criterion=None,distinct=False):
+    def select(self,toSelect,criterion=None,distinct=False,limit=None):
         if self.session is None:
             raise Exception('Open a Session First');
         
-        if criterion is None:
-            vals=self.session.execute(select(toSelect,distinct=distinct))
-        else:
+        query=select(toSelect,distinct=distinct);
+        if criterion is not None:
             if len(criterion)==1:
-                vals=self.session.execute(select(toSelect,distinct=distinct).where(*criterion))
+                query=query.where(*criterion);
             else:
+                query=query.where(and_(*criterion));
+        
+        if limit is not None:
+            query=query.limit(limit);
 
-                vals=self.session.execute(select(toSelect,distinct=distinct).where(and_(*criterion)))
+        vals=self.session.execute(query);
+        # if criterion is None:
+        #     vals=self.session.execute(select(toSelect,distinct=distinct))
+        # else:
+        #     if len(criterion)==1:
+        #         vals=self.session.execute(select(toSelect,distinct=distinct).where(*criterion))
+        #     else:
+        #         vals=self.session.execute(select(toSelect,distinct=distinct).where(and_(*criterion)))
 
         val_list=[];
         for val in vals:

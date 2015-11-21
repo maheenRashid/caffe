@@ -9,6 +9,7 @@ import time
 import random
 import cPickle as pickle
 import experiments_super
+import tests
 from collections import namedtuple
 
 
@@ -55,7 +56,6 @@ def combineDeepFeaturesFromFiles(out_files,layers):
     
     return vals_first;
 
-
 def createParams(type_Experiment):
     if type_Experiment=='nnFullImage':
         list_params=['path_to_images',
@@ -100,12 +100,21 @@ def createParams(type_Experiment):
                     'top_n',
                     'height_width'];
         params=namedtuple('Params_visualizePascalNeighborsFromOtherClass',list_params);
+    elif type_Experiment=='setUpFilesForTrainingOnSubset':
+        list_params=['parent_synset_words_file',
+                    'parent_val_file',
+                    'parent_train_file',
+                    'parent_synset_file',
+                    'new_val_file',
+                    'new_train_file',
+                    'new_synset_file',
+                    'new_synset_words_file',
+                    'to_exclude_text_file']
+        params=namedtuple('Params_setUpFilesForTrainingOnSubset',list_params);
     else:
         params=None
 
     return params;
-
-
 
 def script_temp():
 
@@ -370,10 +379,8 @@ def script_visualizePascalNeighborsFromOtherClass(params):
     vals=mani.select((Imagenet.idx, Imagenet.img_path,Imagenet.class_label_imagenet,Imagenet.neighbor_index),(Imagenet.class_id_pascal==class_id_pascal,Imagenet.layer==layer,Imagenet.trainedClass==trainFlag),distinct=True,limit=limit);
     print len(vals);
     
-    idx_pascal=mani.select((Imagenet.idx,),(Imagenet.class_id_pascal==class_id_pascal,Imagenet.layer==layer,Imagenet.trainedClass==trainFlag),distinct=True)
-
-    idx_pascal=np.array([idx_curr[0] for idx_curr in idx_pascal]);
-    print idx_pascal.shape
+    idx_non_pascal=mani.select((Imagenet.idx,),(Imagenet.class_id_pascal==None,Imagenet.layer==layer,Imagenet.trainedClass==trainFlag),distinct=True)
+    
     img_paths_html=[];
     captions_html=[];
     for val_curr in vals:
@@ -383,7 +390,7 @@ def script_visualizePascalNeighborsFromOtherClass(params):
         img_path=val_curr[1];
         imagenet_label=val_curr[2];
         nearest_neighbor=val_curr[3];
-        remove_bool=np.in1d(nearest_neighbor,idx_pascal);
+        remove_bool=np.in1d(nearest_neighbor,idx_non_pascal,invert=True);
         nearest_neighbor=np.delete(nearest_neighbor,np.where(remove_bool));
         
         html_row.append(img_path.replace(rel_path[0],rel_path[1]));
@@ -402,23 +409,106 @@ def script_visualizePascalNeighborsFromOtherClass(params):
     mani.closeSession();
     visualize.writeHTML(out_file_html,img_paths_html,captions_html,height_width[0],height_width[1]);
 
-def main():
-    db_path_out='sqlite://///disk2/novemberExperiments/nn_imagenet/nn_imagenet.db';
-    class_id_pascal='car';
-    limit=None;
-    layer='fc7';
-    trainFlag=False;
-    rel_path=['/disk2','../../..'];
-    out_file_html='/disk2/novemberExperiments/nn_imagenet/car_nn_non_car.html';
-    top_n=5;
-    height_width=[300,300];
-    
-    params=createParams('visualizePascalNeighborsFromOtherClass');
-    params=params(db_path_out=db_path_out,class_id_pascal=class_id_pascal,limit=limit,layer=layer,trainFlag=trainFlag,rel_path=rel_path,out_file_html=out_file_html,top_n=top_n,height_width=height_width);
-    script_visualizePascalNeighborsFromOtherClass(params);
-    pickle.dump(params._asdict(),open(params.out_file_html+'_meta_experiment.p','wb'));
+def script_setUpFilesForTrainingOnSubset(params):
+    parent_synset_words_file=params.parent_synset_words_file;
+    parent_val_file=params.parent_val_file;
+    parent_train_file=params.parent_train_file;
+    parent_synset_file=params.parent_synset_file;
+    new_val_file=params.new_val_file;
+    new_train_file=params.new_train_file;
+    new_synset_file=params.new_synset_file;
+    new_synset_words_file=params.new_synset_words_file;
+    to_exclude_text_file=params.to_exclude_text_file;
 
+    val_ids=imagenet.readLabelsFile(parent_synset_words_file);
+    val_just_ids=list(zip(*val_ids)[0]);
+    val_just_labels=list(zip(*val_ids)[1]);
+
+    with open(to_exclude_text_file,'rb') as f:
+        to_exclude=f.readlines();
+        to_exclude=[to_exclude_curr.strip('\n') for to_exclude_curr in to_exclude]
+
+
+    ims_to_keep,class_ids_to_keep,classes_to_keep=imagenet.removeImagesFromListByClass(parent_val_file,parent_synset_file,to_exclude);    
+    classes_uni_val=imagenet.writeNewDataClassFile(new_val_file,zip(ims_to_keep,classes_to_keep));
     
+
+    ims_to_keep,class_ids_to_keep,classes_to_keep=imagenet.removeImagesFromListByClass(parent_train_file,parent_synset_file,to_exclude);
+    classes_uni_train=imagenet.writeNewDataClassFile(new_train_file,zip(ims_to_keep,classes_to_keep));
+
+    assert(str(classes_uni_val)==str(classes_uni_train))
+    
+    with open(new_synset_file,'wb') as f:
+        for class_id in classes_uni_train:
+            f.write(class_id+'\n');
+
+    with open(new_synset_words_file,'wb') as f:
+        for class_id in classes_uni_train:
+            f.write(class_id+' '+val_just_labels[val_just_ids.index(class_id)]+'\n');
+
+
+    with open(new_synset_file,'rb') as f:
+        content=f.read();
+
+    #sanity check
+    for id_to_exclude in to_exclude:
+        if id_to_exclude in content:
+            print 'FOUND ERROR',id_to_exclude
+
+
+def main():
+    meta_dir='../../data/ilsvrc12/'
+    meta_synsets_file=os.path.join(meta_dir,'synsets.txt')
+    meta_synset_words_file=os.path.join(meta_dir,'synset_words.txt')
+    meta_train_file=os.path.join(meta_dir,'train.txt')
+    meta_val_file=os.path.join(meta_dir,'val.txt')
+
+    sub_dir='/disk2/novemberExperiments/network_no_pascal'
+    sub_synsets_file=os.path.join(sub_dir,'synsets.txt')
+    sub_synset_words_file=os.path.join(sub_dir,'synset_words.txt')
+    sub_train_file=os.path.join(sub_dir,'train.txt')
+    sub_val_file=os.path.join(sub_dir,'val.txt')
+
+    excluded_ids_all_file=os.path.join(sub_dir,'to_exclude_all.txt');
+
+    # checks=tests.testSubsetFiles(meta_val_file,meta_synset_words_file,sub_val_file,sub_synset_words_file,excluded_ids_all_file,True);
+    # print checks
+    checks=tests.testSubsetFiles(meta_train_file,meta_synset_words_file,sub_train_file,sub_synset_words_file,excluded_ids_all_file,removePath=False);
+    print checks
+
+    return
+    in_dir='/disk2/octoberExperiments/nn_performance_without_pascal';
+    out_dir='/disk2/novemberExperiments/network_no_pascal';
+
+    parent_synset_words_file=os.path.join(in_dir,'synset_words.txt');
+    parent_val_file=os.path.join(in_dir,'new_val.txt');
+    parent_train_file=os.path.join(in_dir,'train.txt');
+    parent_synset_file=os.path.join(in_dir,'synsets.txt');
+    new_val_file=os.path.join(out_dir,'val.txt');
+    new_train_file=os.path.join(out_dir,'train.txt');
+    new_synset_file=os.path.join(out_dir,'synsets.txt');
+    new_synset_words_file=os.path.join(out_dir,'synset_words.txt');
+    to_exclude_text_file=os.path.join(out_dir,'to_exclude.txt');
+
+    to_exclude_meta_file=os.path.join(out_dir,'to_exclude_all.txt');
+    to_exclude_2=imagenet.readSynsetsFile(to_exclude_text_file);
+    to_exclude_1=imagenet.readSynsetsFile(os.path.join(in_dir,'to_exclude.txt'));
+    
+    print len(to_exclude_1),len(to_exclude_2);
+    to_exclude_all=to_exclude_1+to_exclude_2;
+
+    with open(to_exclude_meta_file,'wb') as f:
+        for id_curr in to_exclude_all:
+            f.write(id_curr+'\n');
+    
+    print to_exclude_meta_file
+
+    return
+    
+    params=createParams('setUpFilesForTrainingOnSubset');
+    params=params(parent_synset_words_file=parent_synset_words_file,parent_val_file=parent_val_file,parent_train_file=parent_train_file,parent_synset_file=parent_synset_file, new_val_file=new_val_file,new_train_file=new_train_file,new_synset_file=new_synset_file,new_synset_words_file=new_synset_words_file,to_exclude_text_file=to_exclude_text_file);
+
+    script_setUpFilesForTrainingOnSubset(params)
     
 if __name__=='__main__':
     main();

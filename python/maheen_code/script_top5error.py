@@ -68,6 +68,7 @@ def setUpNet(model_file,deploy_file,mean_file,gpu_no):
 
 def main():
     
+
     # in_file='/disk2/temp/small_set.txt';
     path_to_val='/disk2/imagenet/val'
     
@@ -78,12 +79,33 @@ def main():
     # mean_file='../../python/caffe/imagenet/ilsvrc_2012_mean.npy';
     # out_file_topk='/disk2/octoberExperiments/nn_performance_without_pascal/val_performance_top5_trained.p';
 
-    # val_gt_file='/disk2/octoberExperiments/nn_performance_without_pascal/val.txt'
+    val_gt_file='/disk2/octoberExperiments/nn_performance_without_pascal/new_val.txt'
     synset_words='/disk2/octoberExperiments/nn_performance_without_pascal/synset_words.txt'
     deploy_file='/disk2/octoberExperiments/nn_performance_without_pascal/deploy.prototxt';
     model_file='/disk2/octoberExperiments/nn_performance_without_pascal/snapshot_iter_450000.caffemodel';
     mean_file='/disk2/octoberExperiments/nn_performance_without_pascal/mean.npy';
-    # out_file_topk='/disk2/octoberExperiments/nn_performance_without_pascal/val_performance_top5_no_trained.p';
+    out_file_topk='/disk2/octoberExperiments/nn_performance_without_pascal/new_val_performance_top5_no_trained.p';
+
+    val_gt=imagenet.readLabelsFile(val_gt_file);
+    im_files=list(zip(*val_gt)[0]);
+    im_files=[os.path.join(path_to_val,im_file) for im_file in im_files]
+    imagenet_idx_mapped=list(zip(*val_gt)[1])
+    imagenet_idx_mapped=[int(x) for x in imagenet_idx_mapped];
+    
+    batch_size=1000;
+    top_n=5;
+    gpu_no=1;
+    getClasses=True;
+    net,transformer=setUpNet(model_file,deploy_file,mean_file,gpu_no) 
+    error_bin,pred_classes=getTopNError(net,transformer,im_files,imagenet_idx_mapped,batch_size,top_n,printDebug=True,pred_classes=True)
+    print sum(error_bin),len(error_bin)
+    print pred_classes[:10]
+
+    pickle.dump([error_bin,pred_classes],open(out_file_topk,'wb'));
+
+
+    return
+
 
     db_path='sqlite://///disk2/novemberExperiments/nn_imagenet/nn_imagenet.db';
     

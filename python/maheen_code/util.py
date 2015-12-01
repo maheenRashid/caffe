@@ -16,3 +16,10 @@ def getIdxRange(num_files,batch_size):
     if idx_range[-1]!=num_files:
         idx_range.append(num_files);
     return idx_range;
+
+def readLinesFromFile(file_name):
+    with open(file_name,'rb') as f:
+        lines=f.readlines();
+    lines=[line.strip('\n') for line in lines];
+    return lines
+

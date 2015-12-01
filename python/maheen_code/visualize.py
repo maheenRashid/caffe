@@ -2,6 +2,7 @@ import matplotlib
 import numpy as np;
 matplotlib.use('Agg')
 import matplotlib.pyplot as plt;
+import os;
 
 def writeHTML(file_name,im_paths,captions,height=200,width=200):
     f=open(file_name,'w');
@@ -156,6 +157,14 @@ def plotSimple(xAndYs,out_file,title='',xlabel='',ylabel='',legend_entries=None,
         plt.legend(handles,legend_entries,loc=loc)
     plt.savefig(out_file);
     plt.close();    
+
+def writeHTMLForFolder(path_to_im,ext='jpg',height=300,width=300):
+    im_files=[file_curr for file_curr in os.listdir(path_to_im) if file_curr.endswith(ext)];
+    im_files.sort();
+    im_paths=[[im_file_curr] for im_file_curr in im_files];
+    captions=im_paths;
+    out_file_html=os.path.join(path_to_im,path_to_im[path_to_im.rindex('/')+1:]+'.html');
+    writeHTML(out_file_html,im_paths,captions,height=height,width=width);
 
 
 def main():

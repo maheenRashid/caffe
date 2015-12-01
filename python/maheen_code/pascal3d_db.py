@@ -58,7 +58,7 @@ class Pascal3D_Manipulator(object):
             neighbor_index=np.array(neighbor_index,dtype='int64').tostring()
         return azimuth_differences,neighbor_distance,neighbor_index
 
-    def insert(self,idx,img_path,layer,nn_experiment_timestamp,class_id,class_idx,caffe_model, azimuth=None,neighbor_index=None,neighbor_distance=None,trainedClass=None,azimuth_differences=None):
+    def insert(self,idx,img_path,layer,nn_experiment_timestamp,class_id,class_idx,caffe_model, azimuth=None,neighbor_index=None,neighbor_distance=None,trainedClass=None,azimuth_differences=None,commitFlag=True):
         
         if self.session is None:
             raise Exception('Open a Session First');
@@ -69,7 +69,8 @@ class Pascal3D_Manipulator(object):
         new_val = Pascal3D(idx=idx,img_path=img_path,nn_experiment_timestamp=nn_experiment_timestamp,layer=layer,class_id=class_id,class_idx=class_idx,caffe_model=caffe_model, azimuth=azimuth, neighbor_index=neighbor_index, neighbor_distance=neighbor_distance,trainedClass=trainedClass,azimuth_differences=azimuth_differences)
 
         self.session.add(new_val)
-        self.session.commit();
+        if commitFlag:
+            self.session.commit();
 
         return True;
             

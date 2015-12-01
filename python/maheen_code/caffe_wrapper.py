@@ -4,7 +4,7 @@ sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), os.path.
 import subprocess
 
 
-def saveFeaturesOfLayers(in_file,path_to_classify,gpu_no,layers,ext='JPEG',central_crop=True,meanFile=None,deployFile=None,modelFile=None,out_file=None):
+def saveFeaturesOfLayers(in_file,path_to_classify,gpu_no,layers,ext='JPEG',central_crop=True,meanFile=None,deployFile=None,modelFile=None,out_file=None, images_dim=None):
     
     if out_file is None:
         out_file= time.strftime("%Y%m%d%H%M%S");
@@ -26,7 +26,12 @@ def saveFeaturesOfLayers(in_file,path_to_classify,gpu_no,layers,ext='JPEG',centr
     if modelFile is not None:
         command=command+["--pretrained_model",modelFile];
 
+    if images_dim is not None:
+       command=command+["--images_dim",str(images_dim[0])+','+str(images_dim[1])];
+
+
     command_formatted=' '.join(command);
     success=subprocess.call(command_formatted, shell=True)
+    print command_formatted
     
     return out_file+'.npz';

@@ -151,11 +151,45 @@ def experiment_nnFullImageMixWithImagenet(params):
     
     return params;
 
+def experiment_nnPatches(params):
+    out_file_text=params.out_file_text;
+    class_ids=params.class_id;
+
+    img_paths=util.readLinesFromFile(out_file_text)
+    class_id_idx_tuples=[];
+    for img_path in img_paths:
+        class_id=img_path[:img_path.rindex('_')]
+        class_id=class_id[class_id.rindex('_')+1:];
+        class_idx=class_ids.index(class_id);
+        class_idx=params.class_idx[class_idx];
+        class_id_idx_tuples.append((class_id,class_idx));
+
+    file_names_mat,object_indices=recreateOriginalPaths(params.path_to_annotation,img_paths,returnObject_idx=True);
+    print 'getting azimuths'
+    azimuths=[getObjectStruct(file_name,object_idx).viewpoint.azimuth_coarse  for file_name,object_idx in zip(file_names_mat,object_indices)]
+    
+    if params.out_file_layers is None:
+        print 'running layers part'
+        out_file_layers=caffe_wrapper.saveFeaturesOfLayers(out_file_text,params.path_to_classify,params.gpu_no,params.layers,ext='jpg',out_file=params.out_file_pre,meanFile=params.caffe_mean,deployFile=params.caffe_deploy,modelFile=params.caffe_model,images_dim=params.images_dim)
+        params=params._replace(out_file_layers=out_file_layers)
+        
+    out_file_layers=params.out_file_layers;
+
+    print 'writing to db'
+    for layer in params.layers:
+        vals=np.load(out_file_layers);
+        indices,distances=nearest_neighbor.doCosineDistanceNN(vals[layer],numberOfN=None);
+        mani=Pascal3D_Manipulator(params.db_path_out);
+        mani.openSession();
+        for idx in range(len(img_paths)):
+            mani.insert(idx,img_paths[idx],layer,out_file_layers,class_id_idx_tuples[idx][0],class_id_idx_tuples[idx][1],params.caffe_model, azimuth=azimuths[idx],neighbor_index=indices[idx],neighbor_distance=distances[idx],trainedClass=params.trainFlag,commitFlag=False)
+        mani.closeSession();
+
+    return params
 
 
 def experiment_nnFullImage(params):
-    correctRun=True
-    # try:
+    
     if params.out_file_pickle is None:
         out_file_pickle,out_file_text=setupFilesWithBigObjectForFeatureExtraction(params.db_path,params.class_id,params.threshold,params.out_file_pre,params.path_to_annotation,params.path_to_images)
         params=params._replace(out_file_pickle=out_file_pickle)
@@ -187,10 +221,8 @@ def experiment_nnFullImage(params):
         for idx in range(len(img_paths_originals)):
             mani.insert(idx,img_paths_originals[idx],layer,out_file_layers,class_id_idx_tuples[idx][0],class_id_idx_tuples[idx][1],params.caffe_model, azimuth=azimuths[idx],neighbor_index=indices[idx],neighbor_distance=distances[idx],trainedClass=params.trainFlag)
         mani.closeSession();
-    # except:
-    #     correctRun=False;
-
-    return params,correctRun;
+    
+    return params
 
 def createParams(type_Experiment):
     if type_Experiment=='nnFullImage':
@@ -213,6 +245,24 @@ def createParams(type_Experiment):
                     'out_file_pickle',
                     'out_file_text']
         params=namedtuple('Params_nnFullImage',list_params);
+    elif type_Experiment=='nnPatches':
+        list_params=['path_to_annotation',
+                    'db_path_out',
+                    'class_id',
+                    'class_idx',
+                    'path_to_classify',
+                    'gpu_no',
+                    'layers',
+                    'trainFlag',
+                    'caffe_model',
+                    'caffe_deploy',
+                    'caffe_mean',
+                    'out_file_pre',
+                    'out_file_layers',
+                    'out_file_text',
+                    'images_dim']
+        params=namedtuple('Params_nnFullImage',list_params);
+    
     elif type_Experiment=='visualizeRankDifferenceByAngleImages':
         list_params=['db_path',
                     'class_id',
@@ -511,127 +561,115 @@ def getImageInfoForMixTestFromPascal3d(db_path_in,class_id_pascal,all_files_info
     return all_files_info;
     
 
-
 def main():
-    db_path='sqlite://///disk2/novemberExperiments/nn_pascal3d_imagenet_mix/cars.db';
-    class_id='car';
-    angle=0.0;
-    diff=90.0;
-    delta=5.0;
-    layer=['pool5','fc6','fc7'];
-    out_file_pre='/disk2/novemberExperiments/nn_pascal3d_imagenet_mix/rank_difference_';
-    bins=20;
-    normed=True;
-    out_file_html='/disk2/novemberExperiments/nn_pascal3d_imagenet_mix/rank_difference_'+class_id+'_'+str(angle)+'_'+str(diff)+'_'+str(delta)+'.html';
-    rel_path=['/disk2','../../..'];
-    height_width=[400,400];
+    out_dir='/disk2/novemberExperiments/patches_image_nn';
+    if not os.path.exists(out_dir):
+        os.mkdir(out_dir);
 
-    params=createParams('visualizeRankDifferenceByAngleHist');
-    params=params(db_path=db_path,class_id=class_id,angle=angle,diff=diff,delta=delta,layer=layer,out_file_pre=out_file_pre,bins=bins,normed=normed,out_file_html=out_file_html,rel_path=rel_path,height_width=height_width)
+    old_params_file='/disk2/novemberExperiments/full_image_nn/all_pascal_train_meta_experiment.p';    
+    params_dict=pickle.load(open(old_params_file,'rb'));
+
+    path_to_patches='/disk2/pascal_3d/PASCAL3D+_release1.0/Images_BB';
     
-    script_visualizeRankDifferenceAsHist(params)
+    list_of_im=[img_path for img_path in os.listdir(path_to_patches) if img_path.endswith('.jpg')];
+    list_of_im=[os.path.join(path_to_patches,img_path) for img_path in list_of_im]
 
-    # db_path_out='sqlite://///disk2/novemberExperiments/nn_pascal3d_imagenet_mix/cars.db';
-    # class_id='car';
-    # updateAzimuthDifferencesInDB(db_path_out,class_id);
+    out_file_pre=os.path.join(out_dir,'all_pascal_train')
+    out_file_text=os.path.join(out_dir,'all_pascal_train.txt');
+    print len(list_of_im);
+    # list_of_im=list_of_im[:100];
+
+    with open(out_file_text,'wb') as f:
+        for img_path in list_of_im:
+            f.write(img_path+'\n');
+    
+
+    params_dict_new={};
+    params_dict_new['path_to_annotation'] = params_dict['path_to_annotation']
+    params_dict_new['db_path_out'] = 'sqlite://///disk2/novemberExperiments/patches_image_nn/patches_image_nn.db';
+    params_dict_new['class_id'] = params_dict['class_id']
+    params_dict_new['class_idx'] = params_dict['class_idx']
+    params_dict_new['path_to_classify'] = params_dict['path_to_classify']
+    params_dict_new['gpu_no'] = 1
+    params_dict_new['layers'] = params_dict['layers']
+    params_dict_new['trainFlag'] = params_dict['trainFlag']
+    params_dict_new['caffe_model'] = params_dict['caffe_model']
+    params_dict_new['caffe_deploy'] = params_dict['caffe_deploy']
+    params_dict_new['caffe_mean'] = params_dict['caffe_mean']
+    params_dict_new['out_file_pre'] = out_file_pre
+    params_dict_new['out_file_layers'] = None
+    params_dict_new['out_file_text'] = out_file_text
+    params_dict_new['images_dim'] = [227,227]
+                    
+    for key_curr in params_dict_new.keys():
+        print key_curr,params_dict_new[key_curr]
+
+    params=createParams('nnPatches');
+    params=params(**params_dict_new);
+    params=experiment_nnPatches(params)
+    
+    pickle.dump(params._asdict(),open(os.path.join(params.out_file_pre+'_meta_experiment.p'),'wb'));
+
+    return    
+    print len(list_of_im);
+    list_of_im=list_of_im[:100];
+
+    with open(out_file_text,'wb') as f:
+        for img_path in list_of_im:
+            f.write(img_path+'\n');
+    
+
+
 
     return
-    path_to_images_imagenet='/disk2/imagenet/val';
-    path_to_classify='..';
-    imagenet_ids_to_test=['n03930630','n03977966','n02974003'];
-    val_gt_file='/disk2/octoberExperiments/nn_performance_without_pascal/val.txt'
-    synset_words='/disk2/octoberExperiments/nn_performance_without_pascal/synset_words.txt'
-    caffe_model='/disk2/octoberExperiments/nn_performance_without_pascal/snapshot_iter_450000.caffemodel'
-    caffe_deploy='/disk2/octoberExperiments/nn_performance_without_pascal/deploy.prototxt'
-    caffe_mean='/disk2/octoberExperiments/nn_performance_without_pascal/mean.npy'
-    class_id_pascal='car';
-    db_path_in='sqlite://///disk2/octoberExperiments/nn_pascal3d/full_image_nn_new.db';
-    db_path_out='sqlite://///disk2/novemberExperiments/nn_pascal3d_imagenet_mix/cars.db';
-    out_file_pre='/disk2/novemberExperiments/nn_pascal3d_imagenet_mix/cars_no_train';
-    layers=['pool5','fc6','fc7']
-    ext=None
-    gpu_no=0;
-    trainFlag=False;
-    out_file_text=None;
-    # out_file_pre+'.txt';
-    out_file_pickle=None;
-    # out_file_pre+'.p';
-    out_file_layers=None;
-    # out_file_pre+'.npz';
-    
-    params=createParams('nnFullImageMixWithImagenet');
-    params=params(path_to_images_imagenet=path_to_images_imagenet,path_to_classify=path_to_classify,imagenet_ids_to_test=imagenet_ids_to_test,val_gt_file=val_gt_file,synset_words=synset_words,caffe_model=caffe_model,caffe_deploy=caffe_deploy,caffe_mean=caffe_mean,class_id_pascal=class_id_pascal,db_path_in=db_path_in,db_path_out=db_path_out,out_file_pre=out_file_pre,layers=layers,ext=ext,gpu_no=gpu_no,trainFlag=trainFlag,out_file_text=out_file_text,out_file_pickle=out_file_pickle,out_file_layers=out_file_layers);
+    out_dir='/disk2/novemberExperiments/full_image_nn'
+    old_params_file='/disk2/novemberExperiments/full_image_nn/all_pascal_no_train_meta_experiment.p';
+    params_dict=pickle.load(open(old_params_file,'rb'));
+    # db_path=params_dict['db_path_out'];
+    # for class_id in params_dict['class_id']:
+    #     updateAzimuthDifferencesInDB(db_path,class_id,printDebug=True)
 
-    params=experiment_nnFullImageMixWithImagenet(params);
+    # return
+
+    params_dict_new={};
+    params_dict_new['db_path']=params_dict['db_path_out'];
+    params_dict_new['class_id']=params_dict['class_id'];
+    params_dict_new['angle']=None
+    params_dict_new['diff']=90.0
+    params_dict_new['delta']=5.0
+    params_dict_new['layer']=params_dict['layers']
+    params_dict_new['out_file_pre']=os.path.join(out_dir,'rankDifferenceHist');
+    params_dict_new['bins']=20;
+    params_dict_new['normed']=True
+    params_dict_new['out_file_html']=os.path.join(out_dir,'rankDifferenceHist_'+str(params_dict_new['angle'])+'_'+str(params_dict_new['diff'])+'_'+str(params_dict_new['delta'])+'_all.html');
+    params_dict_new['rel_path']=['/disk2','../../..']
+    params_dict_new['height_width']=[300,300];
+    
+    params=createParams('visualizeRankDifferenceByAngleHist');
+    params=params(**params_dict_new)
+    
+    script_visualizeRankDifferenceAsHist(params)    
+    pickle.dump(params._asdict(),open(params.out_file_html+'_meta_experiment.p','wb'));
+    
+    return
+    path_to_meta_file='/disk2/octoberExperiments/nn_pascal3d/full_image_nn/all_pascal_new_experiment_meta.p';
+    params_dict,runCheck=pickle.load(open(path_to_meta_file,'rb'));
+    
+    params_dict['db_path_out']='sqlite://///disk2/novemberExperiments/full_image_nn/full_image_nn.db';
+    params_dict['out_file_pre']='/disk2/novemberExperiments/full_image_nn/all_pascal_no_train';
+    params_dict['trainFlag']=False;
+    params_dict['caffe_model']='/disk2/novemberExperiments/network_no_pascal/snapshots/snapshot_iter_450000.caffemodel';
+    params_dict['caffe_deploy']='/disk2/novemberExperiments/network_no_pascal/deploy.prototxt';
+    params_dict['caffe_mean']='/disk2/novemberExperiments/network_no_pascal/mean.npy';
+    params_dict['out_file_layers']=None;
+
+    params=createParams('nnFullImage');
+    params=params(**params_dict);
+
+    params,checkRun=experiment_nnFullImage(params)
     pickle.dump(params._asdict(),open(params.out_file_pre+'_meta_experiment.p','wb'));
 
-
     return
-
-    path_to_images_imagenet='/disk2/imagenet/val';
-    path_to_classify='..';
-    imagenet_ids_to_test=['n03930630','n03977966','n02974003'];
-    val_gt_file='/home/maheenrashid/Downloads/caffe/caffe-rc2/data/ilsvrc12/val.txt'
-    synset_words='/home/maheenrashid/Downloads/caffe/caffe-rc2/data/ilsvrc12/synset_words.txt'
-    caffe_model='/home/maheenrashid/Downloads/caffe/caffe-rc2/models/bvlc_reference_caffenet/bvlc_reference_caffenet.caffemodel'
-    caffe_deploy='/home/maheenrashid/Downloads/caffe/caffe-rc2/models/bvlc_reference_caffenet/deploy.prototxt'
-    caffe_mean='/home/maheenrashid/Downloads/caffe/caffe-rc2/python/caffe/imagenet/ilsvrc_2012_mean.npy'
-    class_id_pascal='car';
-    db_path_in='sqlite://///disk2/octoberExperiments/nn_pascal3d/full_image_nn_new.db';
-    db_path_out='sqlite://///disk2/novemberExperiments/nn_pascal3d_imagenet_mix/cars.db';
-    out_file_pre='/disk2/novemberExperiments/nn_pascal3d_imagenet_mix/cars_train';
-    layers=['pool5','fc6','fc7']
-    ext=None
-    gpu_no=0;
-    trainFlag=True;
-    out_file_text=None;
-    # out_file_pre+'.txt';
-    out_file_pickle=None;
-    # out_file_pre+'.p';
-    out_file_layers=None;
-    # out_file_pre+'.npz';
-    return
-    # ['path_to_images',
-    # 'path_to_annotation',
-    # 'db_path_out',
-    # 'class_id',
-    # 'class_idx',
-    # 'threshold',
-    # 'path_to_classify',
-    # 'gpu_no',
-    # 'layers',
-    # 'trainFlag',
-    # 'caffe_model',
-    # 'caffe_deploy',
-    # 'caffe_mean',
-    # 'out_file_pre',
-    # 'out_file_layers',
-    # 'out_file_text']
-    # path_to_images /disk2/pascal_3d/PASCAL3D+_release1.0/Images/
-    # path_to_annotation /disk2/pascal_3d/PASCAL3D+_release1.0/Annotations/
-    # db_path sqlite://///disk2/octoberExperiments/nn_pascal3d/nn_pascal3d_new.db
-    # db_path_out sqlite://///disk2/octoberExperiments/nn_pascal3d/full_image_nn_new.db
-    # class_id ['boat', 'train', 'bicycle', 'chair', 'motorbike', 'aeroplane', 'sofa', 'diningtable', 'bottle', 'tvmonitor', 'bus', 'car']
-    # class_idx [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11]
-    # threshold 0.666666666667
-    # path_to_classify ..
-    # gpu_no 0
-    # layers ['pool5', 'fc6', 'fc7']
-    # trainFlag True
-    # caffe_model /home/maheenrashid/Downloads/caffe/caffe-rc2/models/bvlc_reference_caffenet/bvlc_reference_caffenet.caffemodel
-    # caffe_deploy /home/maheenrashid/Downloads/caffe/caffe-rc2/models/bvlc_reference_caffenet/deploy.prototxt
-    # caffe_mean /home/maheenrashid/Downloads/caffe/caffe-rc2/python/caffe/imagenet/ilsvrc_2012_mean.npy
-    # out_file_pre /disk2/octoberExperiments/nn_pascal3d/full_image_nn/all_pascal_new
-    # out_file_layers /disk2/octoberExperiments/nn_pascal3d/full_image_nn/all_pascal_new.npz
-    # out_file_pickle /disk2/octoberExperiments/nn_pascal3d/full_image_nn/all_pascal_new.p
-    # out_file_text /disk2/octoberExperiments/nn_pascal3d/full_image_nn/all_pascal_new.txt
-
-    # meta_file='/disk2/octoberExperiments/nn_pascal3d/full_image_nn/all_pascal_new_experiment_meta.p'
-    # params,correctRun=pickle.load(open(meta_file,'rb'));
-    # for key_curr in params:
-    #     print key_curr,params[key_curr];
-
-    return      
     db_path_3d='';
     db_path_out='';
     imagnet_ids_to_splay=['n03930630','n03977966','n02974003','n03459775','n04461696','n03345487','n03444034','n04065272','n03445924','n04465501','n03478589','n02860847','n03417042','n02704792','n04252225'];

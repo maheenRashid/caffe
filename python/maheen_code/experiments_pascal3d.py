@@ -323,7 +323,7 @@ def updateAzimuthDifferencesInDB(db_path,class_id,printDebug=True):
     print len(img_paths)
 
     assert len(img_paths),len(set(img_paths))
-    assert img_paths==sorted(img_paths)
+    # assert img_paths==sorted(img_paths)
     assert sorted(indices)==list(indices)
 
     azimuth_differences=getAzimuthDifferences(azimuths)
@@ -563,69 +563,62 @@ def getImageInfoForMixTestFromPascal3d(db_path_in,class_id_pascal,all_files_info
 
 def main():
     out_dir='/disk2/novemberExperiments/patches_image_nn';
-    if not os.path.exists(out_dir):
-        os.mkdir(out_dir);
+    # if not os.path.exists(out_dir):
+    #     os.mkdir(out_dir);
 
-    old_params_file='/disk2/novemberExperiments/full_image_nn/all_pascal_train_meta_experiment.p';    
-    params_dict=pickle.load(open(old_params_file,'rb'));
+    # old_params_file='/disk2/novemberExperiments/full_image_nn/all_pascal_no_train_meta_experiment.p';    
+    # params_dict=pickle.load(open(old_params_file,'rb'));
 
-    path_to_patches='/disk2/pascal_3d/PASCAL3D+_release1.0/Images_BB';
     
-    list_of_im=[img_path for img_path in os.listdir(path_to_patches) if img_path.endswith('.jpg')];
-    list_of_im=[os.path.join(path_to_patches,img_path) for img_path in list_of_im]
+    # out_file_pre=os.path.join(out_dir,'all_pascal_no_train')
+    # out_file_text=os.path.join(out_dir,'all_pascal_train.txt');
+    
 
-    out_file_pre=os.path.join(out_dir,'all_pascal_train')
-    out_file_text=os.path.join(out_dir,'all_pascal_train.txt');
-    print len(list_of_im);
+    # params_dict_new={};
+    # params_dict_new['path_to_annotation'] = params_dict['path_to_annotation']
+    # params_dict_new['db_path_out'] = 'sqlite://///disk2/novemberExperiments/patches_image_nn/patches_image_nn.db';
+    # params_dict_new['class_id'] = params_dict['class_id']
+    # params_dict_new['class_idx'] = params_dict['class_idx']
+    # params_dict_new['path_to_classify'] = params_dict['path_to_classify']
+    # params_dict_new['gpu_no'] = 1
+    # params_dict_new['layers'] = params_dict['layers']
+    # params_dict_new['trainFlag'] = params_dict['trainFlag']
+    # params_dict_new['caffe_model'] = params_dict['caffe_model']
+    # params_dict_new['caffe_deploy'] = params_dict['caffe_deploy']
+    # params_dict_new['caffe_mean'] = params_dict['caffe_mean']
+    # params_dict_new['out_file_pre'] = out_file_pre
+    # params_dict_new['out_file_layers'] = None
+    # params_dict_new['out_file_text'] = out_file_text
+    # params_dict_new['images_dim'] = [227,227]
+                    
+    # for key_curr in params_dict_new.keys():
+    #     print key_curr,params_dict_new[key_curr]
+    # # return
+    # params=createParams('nnPatches');
+    # params=params(**params_dict_new);
+    # params=experiment_nnPatches(params)
+    
+    # pickle.dump(params._asdict(),open(os.path.join(params.out_file_pre+'_meta_experiment.p'),'wb'));
+
+    # return    
+    # path_to_patches='/disk2/pascal_3d/PASCAL3D+_release1.0/Images_BB';
+    
+    # list_of_im=[img_path for img_path in os.listdir(path_to_patches) if img_path.endswith('.jpg')];
+    # list_of_im=[os.path.join(path_to_patches,img_path) for img_path in list_of_im]
+    # print len(list_of_im);
     # list_of_im=list_of_im[:100];
 
-    with open(out_file_text,'wb') as f:
-        for img_path in list_of_im:
-            f.write(img_path+'\n');
+    # with open(out_file_text,'wb') as f:
+    #     for img_path in list_of_im:
+    #         f.write(img_path+'\n');
     
-
-    params_dict_new={};
-    params_dict_new['path_to_annotation'] = params_dict['path_to_annotation']
-    params_dict_new['db_path_out'] = 'sqlite://///disk2/novemberExperiments/patches_image_nn/patches_image_nn.db';
-    params_dict_new['class_id'] = params_dict['class_id']
-    params_dict_new['class_idx'] = params_dict['class_idx']
-    params_dict_new['path_to_classify'] = params_dict['path_to_classify']
-    params_dict_new['gpu_no'] = 1
-    params_dict_new['layers'] = params_dict['layers']
-    params_dict_new['trainFlag'] = params_dict['trainFlag']
-    params_dict_new['caffe_model'] = params_dict['caffe_model']
-    params_dict_new['caffe_deploy'] = params_dict['caffe_deploy']
-    params_dict_new['caffe_mean'] = params_dict['caffe_mean']
-    params_dict_new['out_file_pre'] = out_file_pre
-    params_dict_new['out_file_layers'] = None
-    params_dict_new['out_file_text'] = out_file_text
-    params_dict_new['images_dim'] = [227,227]
-                    
-    for key_curr in params_dict_new.keys():
-        print key_curr,params_dict_new[key_curr]
-
-    params=createParams('nnPatches');
-    params=params(**params_dict_new);
-    params=experiment_nnPatches(params)
     
-    pickle.dump(params._asdict(),open(os.path.join(params.out_file_pre+'_meta_experiment.p'),'wb'));
-
-    return    
-    print len(list_of_im);
-    list_of_im=list_of_im[:100];
-
-    with open(out_file_text,'wb') as f:
-        for img_path in list_of_im:
-            f.write(img_path+'\n');
-    
-
-
-
-    return
-    out_dir='/disk2/novemberExperiments/full_image_nn'
-    old_params_file='/disk2/novemberExperiments/full_image_nn/all_pascal_no_train_meta_experiment.p';
+    # return
+    # out_dir='/disk2/novemberExperiments/full_image_nn'
+    old_params_file='/disk2/novemberExperiments/patches_image_nn/all_pascal_no_train_meta_experiment.p';
     params_dict=pickle.load(open(old_params_file,'rb'));
     # db_path=params_dict['db_path_out'];
+    # print db_path
     # for class_id in params_dict['class_id']:
     #     updateAzimuthDifferencesInDB(db_path,class_id,printDebug=True)
 

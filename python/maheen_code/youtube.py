@@ -223,6 +223,20 @@ def writeMetaInfoToDb(path_to_db,out_files,idx_global,class_ids_all,path_to_data
 def main():
     path_to_db='sqlite://///disk2/novemberExperiments/experiments_youtube/patches_nn_test.db';
 
+    mani=Tube_Manipulator(path_to_db);
+    mani.openSession();
+    pascal_ids=mani.select((Tube.class_id_pascal,),distinct=True);
+    print pascal_ids;
+    mani.closeSession();
+
+    # res11/tubePatches/aeroplane_10_1/
+
+    # mani.insert(idx_global, img_path, frame_id, video_id, tube_id, shot_id, frame_path=frame_path, layer=layer, deep_features_path=deep_features_path, deep_features_idx=deep_features_idx, class_id_pascal=class_id_pascal, class_idx_pascal=class_idx_pascal,commit=False);
+            
+
+    return
+    path_to_db='sqlite://///disk2/novemberExperiments/experiments_youtube/patches_nn_test.db';
+
     path_to_data='/disk2/youtube/categories';
     
     out_file_pre='/disk2/res11/featureExtractionInputOutputFiles/out_files_'

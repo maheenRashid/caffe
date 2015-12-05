@@ -1,7 +1,14 @@
 import sklearn;
 from sklearn import preprocessing
+import sklearn.neighbors
+import util
 import numpy as np
 import time
+import pycuda.autoinit
+import pycuda.gpuarray
+import skcuda.linalg
+skcuda.linalg.init();
+
 def doCosineDistanceNN(features_curr,numberOfN=5,binarize=False):
     feature_len=1;
     for dim_val in list(features_curr.shape)[1:]:
@@ -28,5 +35,25 @@ def doCosineDistanceNN(features_curr,numberOfN=5,binarize=False):
         indices=indices[:,:-1];
         distances=distances[:,:-1];
 
+    return indices,distances
+
+def getNearestNeighbors(query,data,gpuFlag=False):
+
+    query_n=util.normalize(query);
+    train_n=util.normalize(data);
+        
+    if not gpuFlag:
+        distances=np.dot(query_n,train_n.T);
+        
+    else:
+        train_n=np.ascontiguousarray(train_n.T);
+        query_n=pycuda.gpuarray.to_gpu(query_n);
+        train_n=pycuda.gpuarray.to_gpu(train_n);
+        distances_gpu=skcuda.linalg.dot(query_n,train_n);
+        distances=np.zeros(distances_gpu.shape,dtype=distances_gpu.dtype);
+        distances_gpu.get(distances);
+    
+    indices=np.argsort(distances,axis=1)[:,::-1]
+    distances=(1-np.sort(distances,axis=1))[:,::-1];        
     return indices,distances
 

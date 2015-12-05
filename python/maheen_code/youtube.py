@@ -6,14 +6,16 @@ import cPickle as pickle
 from scipy import misc;
 import visualize;
 import math;
+import random;
 import time;
 import caffe_wrapper;
 import multiprocessing;
 import script_top5error;
 import util;
 import subprocess;
+import nearest_neighbor
 from tube_db import Tube, Tube_Manipulator
-
+from collections import namedtuple
 def addLeadingZeros(num,sizeOfStr):
     num_str=str(num);
     zeros='0'*(sizeOfStr-len(num_str));
@@ -220,19 +222,150 @@ def writeMetaInfoToDb(path_to_db,out_files,idx_global,class_ids_all,path_to_data
     mani.closeSession();
     return idx_global;
 
-def main():
-    path_to_db='sqlite://///disk2/novemberExperiments/experiments_youtube/patches_nn_test.db';
+def getTubePathsForShot(path_to_db,class_id_pascal,video_id,shot_id,frame_to_choose='middle'):
+    mani=Tube_Manipulator(path_to_db);
+    
+    mani.openSession();
+    frame_ids=mani.select((Tube.frame_id,),(Tube.class_id_pascal==class_id_pascal,Tube.shot_id==shot_id,Tube.video_id==video_id),distinct=True);
+    
+    frame_ids=[frame_id[0] for frame_id in frame_ids];
+    frame_ids.sort();
+    
+    if frame_to_choose=='middle':
+        middle_idx=len(frame_ids)/2;
+        frame_id=frame_ids[middle_idx];
+    else:
+        frame_id=0;
+
+    paths=mani.select((Tube.img_path,),(Tube.class_id_pascal==class_id_pascal,Tube.shot_id==shot_id,Tube.video_id==video_id,Tube.frame_id==frame_id),distinct=True);
+    paths=[path[0] for path in paths];
+
+    mani.closeSession();
+    return paths;
+
+def getNVideosByPascalIds(path_to_db,pascal_ids,numberofVideos):
+    
+    dict_out={};
 
     mani=Tube_Manipulator(path_to_db);
     mani.openSession();
-    pascal_ids=mani.select((Tube.class_id_pascal,),distinct=True);
-    print pascal_ids;
+    for pascal_id in pascal_ids:
+        total_ids=mani.select((Tube.video_id,),(Tube.class_id_pascal==pascal_id,),distinct=True,limit=numberofVideos);
+        total_ids=[total_id[0] for total_id in total_ids];
+        # random.shuffle(total_ids);
+        # selected_ids=total_ids[:numberofVideos];
+        dict_out[pascal_id]=total_ids;
     mani.closeSession();
+    return dict_out
 
-    # res11/tubePatches/aeroplane_10_1/
+def setUpFeaturesMat(info_for_extraction,dtype='float64'):
+    img_paths = np.array([info_curr[0] for info_curr in info_for_extraction]);
+    labels = np.array([info_curr[1] for info_curr in info_for_extraction]);
+    paths = np.array([info_curr[2] for info_curr in info_for_extraction]);
+    deep_idx = np.array([info_curr[3] for info_curr in info_for_extraction]);
 
-    # mani.insert(idx_global, img_path, frame_id, video_id, tube_id, shot_id, frame_path=frame_path, layer=layer, deep_features_path=deep_features_path, deep_features_idx=deep_features_idx, class_id_pascal=class_id_pascal, class_idx_pascal=class_idx_pascal,commit=False);
-            
+    features=np.zeros((len(info_for_extraction),4096),dtype=dtype);
+    paths_uni=np.unique(paths);
+    
+    for path_curr in paths_uni:
+        vals=np.load(path_curr);
+        vals=vals['fc7'];
+        idx_rel=np.where(paths==path_curr);
+        idx_to_extract=deep_idx[idx_rel];
+        features[idx_rel[0],:]=vals[idx_to_extract,:,:,:].reshape((len(idx_to_extract),4096));
+    return features,labels,img_paths    
+
+def getInfoForFeatureExtractionForVideo(path_to_db,video_info,numberOfFrames):
+    info_for_extraction=[];
+    mani=Tube_Manipulator(path_to_db);
+    mani.openSession();
+    for pascal_id in video_info:
+        video_ids=video_info[pascal_id];
+        for video_id in video_ids:
+            info=mani.select((Tube.img_path,Tube.class_id_pascal,Tube.deep_features_path,Tube.deep_features_idx),(Tube.video_id==video_id,Tube.class_id_pascal==pascal_id),distinct=True,limit=numberOfFrames);
+            info_for_extraction=info_for_extraction+info;
+    mani.closeSession();
+    return info_for_extraction
+
+def getInfoForExtractionForTube(path_to_db,pascal_id,video_id,shot_id,tube_id):
+    mani=Tube_Manipulator(path_to_db);
+    mani.openSession();
+    info=mani.select((Tube.img_path,Tube.class_id_pascal,Tube.deep_features_path,Tube.deep_features_idx),(Tube.video_id==video_id,Tube.class_id_pascal==pascal_id,Tube.tube_id==tube_id,Tube.shot_id==shot_id),distinct=True);
+    mani.closeSession();
+    return info
+
+
+def script_toyNNExperiment(params):
+    path_to_db = params.path_to_db;
+    class_id_pascal = params.class_id_pascal;
+    video_id = params.video_id;
+    shot_id = params.shot_id;
+    tube_id = params.tube_id;
+    numberofVideos = params.numberofVideos;
+    numberOfFrames = params.numberOfFrames;
+    out_file_html = params.out_file_html;
+    rel_path = params.rel_path;
+    out_file_hist = params.out_file_hist;
+    gpuFlag = params.gpuFlag;
+    dtype = params.dtype;
+    pascal_ids = params.pascal_ids;
+    video_info = params.video_info;
+
+    info_for_extraction=getInfoForFeatureExtractionForVideo(path_to_db,video_info,numberOfFrames);    
+    video_info={class_id_pascal:[video_id]}
+    info_for_extraction_query=getInfoForExtractionForTube(path_to_db,class_id_pascal,video_id,shot_id,tube_id)
+    features_train,labels_train,img_paths_train=setUpFeaturesMat(info_for_extraction,dtype=dtype);
+    features_test,labels_test,img_paths_test=setUpFeaturesMat(info_for_extraction_query,dtype=dtype);
+    indices,distances=nearest_neighbor.getNearestNeighbors(features_test,features_train,gpuFlag=gpuFlag);
+    
+    img_paths_html=[];
+    captions_html=[];
+    record_wrong=[]
+    for r in range(indices.shape[0]):
+        img_paths_row=[img_paths_test[r].replace(rel_path[0],rel_path[1])];
+        captions_row=[labels_test[r]];
+        for c in range(indices.shape[1]):
+            rank=indices[r,c];
+            img_paths_row.append(img_paths_train[rank].replace(rel_path[0],rel_path[1]))
+            captions_row.append(labels_train[rank]);
+            if labels_train[rank]!=labels_test[r]:
+                record_wrong.append(c);
+        img_paths_html.append(img_paths_row);
+        captions_html.append(captions_row);
+
+    visualize.writeHTML(out_file_html,img_paths_html,captions_html);
+    visualize.hist(record_wrong,out_file_hist,bins=20,normed=True,xlabel='Rank of Incorrect Class',ylabel='Frequency',title='')
+
+def createParams(type_Experiment):
+    if type_Experiment=='toyNNExperiment':
+        list_params=['path_to_db',
+                    'class_id_pascal',
+                    'video_id',
+                    'shot_id',
+                    'tube_id',
+                    'numberofVideos',
+                    'numberOfFrames',
+                    'out_file_html',
+                    'rel_path',
+                    'out_file_hist',
+                    'gpuFlag',
+                    'dtype',
+                    'pascal_ids',
+                    'video_info']
+        params=namedtuple('Params_toyNNExperiment',list_params);
+    else:
+        params=None;
+
+    return params
+    
+
+
+
+def main():
+    
+
+
+
 
     return
     path_to_db='sqlite://///disk2/novemberExperiments/experiments_youtube/patches_nn_test.db';

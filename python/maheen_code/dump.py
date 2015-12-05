@@ -1,3 +1,124 @@
+FOR script_toyNNExperiment youtube
+    path_to_db='sqlite://///disk2/novemberExperiments/experiments_youtube/patches_nn_test.db';
+    class_id_pascal='aeroplane';
+    video_id=10;
+    shot_id=1;
+    tube_id=0;
+    numberofVideos=2;
+    numberOfFrames=120;
+    out_file_html='/disk2/temp/tubes_nn_16.html';
+    rel_path=('/disk2','..');
+    out_file_hist='/disk2/temp/tubes_nn_16.png';
+    gpuFlag=True;
+    dtype='float16';
+    mani=Tube_Manipulator(path_to_db);
+    mani.openSession();
+    pascal_ids=mani.select((Tube.class_id_pascal,),distinct=True);
+    pascal_ids=[pascal_id[0] for pascal_id in pascal_ids];
+    mani.closeSession();
+
+    video_info={};
+    for pascal_id in pascal_ids:
+        video_info[pascal_id]=[1,2]
+
+    params_dict={};
+    params_dict['path_to_db'] = path_to_db
+    params_dict['class_id_pascal'] = class_id_pascal
+    params_dict['video_id'] = video_id
+    params_dict['shot_id'] = shot_id
+    params_dict['tube_id'] = tube_id
+    params_dict['numberofVideos'] = numberofVideos
+    params_dict['numberOfFrames'] = numberOfFrames
+    params_dict['out_file_html'] = out_file_html
+    params_dict['rel_path'] = rel_path
+    params_dict['out_file_hist'] = out_file_hist
+    params_dict['gpuFlag'] = gpuFlag
+    params_dict['dtype'] = dtype
+    params_dict['pascal_ids'] = pascal_ids
+    params_dict['video_info'] = video_info
+    params=createParams('toyNNExperiment');
+    params=params(**params_dict);
+    
+    script_toyNNExperiment(params);
+    pickle.dump(params._asdict(),open(params.out_file_html+'_meta_experiment.p','wb'));
+
+
+
+FOR script_saveTubePatches youtube
+    path_to_data='/disk2/youtube/categories'
+    out_dir_patches='/disk2/res11/tubePatches';
+    path_to_mat='/disk2/res11';
+
+    if not os.path.exists(out_dir_patches):
+        os.mkdir(out_dir_patches);
+
+    mat_files=[os.path.join(path_to_mat,file_curr) for file_curr in os.listdir(path_to_mat) if file_curr.endswith('.mat')]
+    # idx=18;
+
+    # mat_files=mat_files[:idx]
+    script_saveTubePatches(mat_files,path_to_data,out_dir_patches,numThreads=8)
+
+FOR script_breakUpInFilesListForFeatureExtraction youtube
+    path_to_patches='/disk2/res11/tubePatches'
+    file_index='/disk2/res11/featureExtractionInputOutputFiles/list_of_files.p';
+    in_file_meta_pre='/disk2/res11/featureExtractionInputOutputFiles/in_files';
+    out_file_meta_pre='/disk2/res11/featureExtractionInputOutputFiles/out_files'
+    
+    script_breakUpInFilesListForFeatureExtraction(file_index,in_file_meta_pre,out_file_meta_pre)
+
+FOR fixing val.txt
+    new_val='/disk2/octoberExperiments/nn_performance_without_pascal/new_val.txt'
+    parent_val='../../data/ilsvrc12/val.txt';
+    synsets='/disk2/octoberExperiments/nn_performance_without_pascal/synsets.txt';
+    class_ids=imagenet.readSynsetsFile(synsets);
+    print len(class_ids);
+    print class_ids[:10];
+
+    synsets_parent='../../data/ilsvrc12/synsets.txt';
+    class_ids_parent=imagenet.readSynsetsFile(synsets_parent);
+    print len(class_ids_parent);
+    print class_ids_parent[:10];
+
+    idx_to_keep=np.where(np.in1d(class_ids_parent,class_ids))[0];
+
+    val_gt_data=imagenet.readLabelsFile(parent_val);
+    img_paths,class_idx=zip(*val_gt_data);
+    class_idx=np.array([int(class_idx_curr) for class_idx_curr in class_idx]);
+    img_paths=np.array(list(img_paths));
+
+    img_paths_to_keep=[];
+    class_idx_to_keep=[];
+    for idx_to_keep_curr in idx_to_keep:
+        # print idx_to_keep_curr
+        img_paths_rel=img_paths[class_idx==idx_to_keep_curr];
+        class_idx_rel=class_ids.index(class_ids_parent[idx_to_keep_curr]);
+        class_idx_to_keep.extend([class_idx_rel]*len(img_paths_rel));
+        img_paths_to_keep.extend(img_paths_rel);
+
+    print len(img_paths_to_keep),len(set(class_idx_to_keep)),min(class_idx_to_keep),max(class_idx_to_keep)
+    assert sorted(list(set(class_idx_to_keep)))==range(len(idx_to_keep));
+    with open(new_val,'wb') as f:
+        for idx in range(len(img_paths_to_keep)):
+            f.write(img_paths_to_keep[idx]+' '+str(class_idx_to_keep[idx])+'\n');
+
+
+FOR visualizePascalNeighborsFromOtherClass
+    db_path_out='sqlite://///disk2/novemberExperiments/nn_imagenet/nn_imagenet.db';
+    class_id_pascal='car';
+    limit=None;
+    layer='fc7';
+    trainFlag=False;
+    rel_path=['/disk2','../../..'];
+    out_file_html='/disk2/novemberExperiments/nn_imagenet/car_nn_non_car_new.html';
+    top_n=5;
+    height_width=[300,300];
+    
+    params=createParams('visualizePascalNeighborsFromOtherClass');
+    params=params(db_path_out=db_path_out,class_id_pascal=class_id_pascal,limit=limit,layer=layer,trainFlag=trainFlag,rel_path=rel_path,out_file_html=out_file_html,top_n=top_n,height_width=height_width);
+    script_visualizePascalNeighborsFromOtherClass(params);
+    pickle.dump(params._asdict(),open(params.out_file_html+'_meta_experiment.p','wb'));
+
+
 FOR nnFullImageMixWithImagenet
     db_path='sqlite://///disk2/novemberExperiments/nn_pascal3d_imagenet_mix/cars.db';
     class_id='car';

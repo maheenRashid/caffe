@@ -23,3 +23,9 @@ def readLinesFromFile(file_name):
     lines=[line.strip('\n') for line in lines];
     return lines
 
+def normalize(matrix):
+    norm=np.sqrt(np.sum(np.square(matrix),1));
+    norm=np.expand_dims(norm,1);
+    matrix_n=matrix/np.tile(norm,(1,matrix.shape[1]));
+    return matrix_n
+

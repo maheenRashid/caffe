@@ -4,13 +4,15 @@ from sqlalchemy import Column, Float, Integer, String,Boolean
 from sqlalchemy.dialects.mysql import BLOB as Blob
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy import create_engine,and_
-from sqlalchemy.orm import sessionmaker
+from sqlalchemy.orm import sessionmaker,relationship
 from sqlalchemy.sql import select
 import sqlalchemy
-
+from sqlalchemy.schema import ForeignKey
 import numpy as np;
+# from tubehash_db import TubeHash
 
 Base = declarative_base()
+
 
 class Tube(Base):
     __tablename__ = 'Tube'
@@ -35,7 +37,16 @@ class Tube(Base):
     neighbor_index=Column(Blob);
     neighbor_distance=Column(Blob);
     neighbor_index_in_db=Column(Blob);
-    
+    children = relationship("TubeHash");
+
+class TubeHash(Base):
+    __tablename__ = 'TubeHash'
+    # 'user_id', Integer, ForeignKey("user.user_id")
+    idx = Column(Integer,ForeignKey('Tube.idx'),nullable=False,primary_key=True);
+    hash_table = Column(Integer,nullable=False,primary_key=True);
+    hash_val = Column(Integer);
+
+
 class Tube_Manipulator(object):
 
     def __init__(self,path_to_db):
@@ -176,10 +187,80 @@ class Tube_Manipulator(object):
 
         return val_list
 
+class TubeHash_Manipulator(object):
+
+    def __init__(self,path_to_db):
+        self.db_path=path_to_db;
+        self.engine=create_engine(self.db_path);
+        if not os.path.exists(path_to_db):
+            Base.metadata.create_all(self.engine);    
+        # print self.engine
+        Base.metadata.bind=self.engine;
+        self.session=None;
+
+    def openSession(self):
+        DBSession=sessionmaker(bind=self.engine);
+        self.session=DBSession();
+
+    def closeSession(self):
+        self.session.commit();
+        self.session.close();
+        self.session=None;
+
+    def insert(self, idx, hash_table,hash_val,commit=True):
+
+        
+        if self.session is None:
+            raise Exception('Open a Session First');
+
+        new_val= TubeHash(idx=idx,
+                    hash_table=hash_table,
+                    hash_val=hash_val)
+
+        self.session.add(new_val)
+        if commit:
+            self.session.commit();
+
+        return True;
+            
+    def filter(self,criterion):
+        if self.session is None:
+            raise Exception('Open a Session First');
+        vals=self.session.query(TubeHash).filter(*criterion).all();
+        return vals
+    
+    def update(self,criterion,updateVals):
+
+        if self.session is None:
+            raise Exception('Open a Session First');
+
+        self.session.query(TubeHash).filter(*criterion).update(updateVals);
+        return True
+
+    def select(self,toSelect,criterion=None,distinct=False,limit=None):
+        if self.session is None:
+            raise Exception('Open a Session First');
+        
+        query=select(toSelect,distinct=distinct);
+        if criterion is not None:
+            if len(criterion)==1:
+                query=query.where(*criterion);
+            else:
+                query=query.where(and_(*criterion));
+        
+        if limit is not None:
+            query=query.limit(limit);
+
+        vals=self.session.execute(query);
+        return vals
+
 def main():
     
-    mani=Tube_Manipulator('sqlite:///temp/Tube.db');
+    mani=TubeHash_Manipulator('sqlite:///temp/Tube.db');
     mani.openSession();
+    mani.insert(idx=0,hash_table=3,hash_val=3);
+    mani.closeSession();
+    return
     idx=0;
     img_path='img_path';
     frame_id=0;

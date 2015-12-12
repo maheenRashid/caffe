@@ -1,6 +1,8 @@
 import os;
 import numpy as np;
-import matplotlib as plt;
+import matplotlib
+matplotlib.use('Agg')
+import matplotlib.pyplot as plt;
 import scipy.io
 import cPickle as pickle
 from scipy import misc;
@@ -14,8 +16,11 @@ import script_top5error;
 import util;
 import subprocess;
 import nearest_neighbor
-from tube_db import Tube, Tube_Manipulator
+from tube_db import Tube, Tube_Manipulator,TubeHash_Manipulator,TubeHash
 from collections import namedtuple
+import lsh;
+
+
 def addLeadingZeros(num,sizeOfStr):
     num_str=str(num);
     zeros='0'*(sizeOfStr-len(num_str));
@@ -310,12 +315,14 @@ def script_toyNNExperiment(params):
     dtype = params.dtype;
     pascal_ids = params.pascal_ids;
     video_info = params.video_info;
+    out_file_pickle = params.out_file_pickle
 
     info_for_extraction=getInfoForFeatureExtractionForVideo(path_to_db,video_info,numberOfFrames);    
     video_info={class_id_pascal:[video_id]}
     info_for_extraction_query=getInfoForExtractionForTube(path_to_db,class_id_pascal,video_id,shot_id,tube_id)
     features_train,labels_train,img_paths_train=setUpFeaturesMat(info_for_extraction,dtype=dtype);
     features_test,labels_test,img_paths_test=setUpFeaturesMat(info_for_extraction_query,dtype=dtype);
+    # features_test,labels_test,img_paths_test=setUpFeaturesMat(info_for_extraction,dtype=dtype);
     indices,distances=nearest_neighbor.getNearestNeighbors(features_test,features_train,gpuFlag=gpuFlag);
     
     img_paths_html=[];
@@ -335,6 +342,7 @@ def script_toyNNExperiment(params):
 
     visualize.writeHTML(out_file_html,img_paths_html,captions_html);
     visualize.hist(record_wrong,out_file_hist,bins=20,normed=True,xlabel='Rank of Incorrect Class',ylabel='Frequency',title='')
+    pickle.dump([features_test,features_train,labels_test,labels_train,img_paths_test,img_paths_train,indices,distances],open(out_file_pickle,'wb'));
 
 def createParams(type_Experiment):
     if type_Experiment=='toyNNExperiment':
@@ -351,22 +359,123 @@ def createParams(type_Experiment):
                     'gpuFlag',
                     'dtype',
                     'pascal_ids',
-                    'video_info']
+                    'video_info',
+                    'out_file_pickle']
         params=namedtuple('Params_toyNNExperiment',list_params);
+    elif type_Experiment=='compareHashWithToyExperiment':
+        list_params=['in_file',
+                    'num_hash_tables_all',
+                    'key_type',
+                    'out_file_pres',
+                    'out_file_indices',
+                    'out_file_html',
+                    'rel_path']
+        params=namedtuple('Params_compareHashWithToyExperiment',list_params);
     else:
         params=None;
 
     return params
     
+def saveHash((hash_file,deep_features_path,out_file,key_type,idx)):
+    print idx
+    vals=np.load(deep_features_path);
+    vals=vals['fc7'];
+    num_frames=vals.shape[0];
+    feature_dim=vals.shape[1];
+    vals=np.reshape(vals,(num_frames,feature_dim));
+    hp_hash=lsh.HyperplaneHash(hasher_file=hash_file,key_type=key_type);    
+    hash_keys=hp_hash.hash(vals);
+    np.save(out_file,hash_keys);
+    
+def getIndicesHash(features_test,features_train,num_hash_tables,key_type):
+    assert features_test.shape[1]==features_train.shape[1]
+    hp_hash=lsh.HyperplaneHash((features_test.shape[1],num_hash_tables),key_type=key_type);
+    hash_test=hp_hash.hash(features_test);
+    hash_train=hp_hash.hash(features_train);
 
+    indices_hash=np.zeros((features_test.shape[0],features_train.shape[0]),dtype='int');
+    for idx_row in range(hash_test.shape[0]):
+        row_curr=np.tile(np.expand_dims(hash_test[idx_row,:],0),(hash_train.shape[0],1));
+        bin_match=np.equal(row_curr,hash_train);
+        bin_match=bin_match.sum(axis=1);
+        indices_hash[idx_row,:]=np.argsort(bin_match)[::-1];
+
+    return indices_hash
+
+def script_compareHashWithToyExperiment(params):
+    in_file = params.in_file;
+    num_hash_tables_all = params.num_hash_tables_all;
+    key_type = params.key_type;
+    out_file_indices = params.out_file_indices;
+    out_file_pres = params.out_file_pres;
+    out_file_html = params.out_file_html;
+    rel_path = params.rel_path;
+
+    [features_test,features_train,labels_test,labels_train,_,_,indices,_]=pickle.load(open(in_file,'rb'));
+    visualize.saveMatAsImage(indices,out_file_indices);    
+    
+    for out_file_pre,num_hash_tables in zip(out_file_pres,num_hash_tables_all):
+        
+        indices_hash = getIndicesHash(features_test,features_train,num_hash_tables,key_type);
+        visualize.saveMatAsImage(indices_hash,out_file_pre+'.png');    
+        pickle.dump([indices_hash,indices],open(out_file_pre+'.p','wb'));
+    
+    sizes = scipy.misc.imread(out_file_indices);
+    sizes = sizes.shape
+
+    im_files_html=[];
+    captions_html=[];
+    for idx,out_file_pre in enumerate(out_file_pres):
+        out_file_curr=out_file_pre+'.png'
+        key_str=str(key_type);
+        key_str=key_str.replace('<type ','').replace('>','');
+        caption_curr='NN Hash. KeyType: '+key_str+' Num Hash Tables: '+str(num_hash_tables_all[idx])
+        im_files_html.append([out_file_indices.replace(rel_path[0],rel_path[1]),out_file_curr.replace(rel_path[0],rel_path[1])])
+        captions_html.append(['NN cosine',caption_curr]);
+
+    visualize.writeHTML(out_file_html,im_files_html,captions_html,sizes[0]/2,sizes[1]/2);
 
 
 def main():
+
+
     
+    return
+    path_to_db='sqlite://///disk2/novemberExperiments/experiments_youtube/patches_nn_hash.db';
+    mani=Tube_Manipulator(path_to_db);
+    mani_hash=TubeHash_Manipulator(path_to_db);
+    
+    mani.openSession();
+    deep_features_path_all=mani.select((Tube.deep_features_path,),distinct=True);
+    deep_features_path_all=[x[0] for x in deep_features_path_all];
+    
+    print len(deep_features_path_all);
+    # print deep_features_path_all[:10]
 
+    mani_hash.openSession();
+    
+    for idx_deep_features_path,deep_features_path in enumerate(deep_features_path_all[11:]):
+        t=time.time();
+        hash_file=deep_features_path[:-4]+'_hash.npy';
+        print hash_file
+        idx_info=mani.select((Tube.idx,Tube.deep_features_idx),(Tube.deep_features_path==deep_features_path,));
+        # idx_all,deep_features_idx_all=zip(*idx_info);
+        hash_vals=np.load(hash_file);
+        # print len(idx_all),hash_vals.shape
+        for idx_foreign,row in idx_info:
+            # hash_vals_curr=hash_vals[row];
+            for hash_table,hash_val in enumerate(hash_vals[row]):
+                # pass;
+                # print type(idx_foreign),type(hash_table),type(int(hash_val))
+                mani_hash.insert(idx=idx_foreign,hash_table=hash_table,hash_val=int(hash_val),commit=False);
+        
+        if idx_deep_features_path%10==0:
+            mani_hash.session.commit();
 
+        # print time.time()-t;
 
-
+    mani_hash.closeSession();
+    mani.closeSession();
     return
     path_to_db='sqlite://///disk2/novemberExperiments/experiments_youtube/patches_nn_test.db';
 

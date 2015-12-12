@@ -1,4 +1,63 @@
 FOR script_toyNNExperiment youtube
+    out_file_html='/disk2/temp/tubes_nn_16.html';
+    params_dict=pickle.load(open(out_file_html+'_meta_experiment.p','rb'));
+    params_dict['dtype']='float32';
+    params_dict['out_file_html']=os.path.join(out_dir,'tubes_nn_32.html');
+    params_dict['out_file_hist']=os.path.join(out_dir,'tubes_nn_32.png');
+    params_dict['out_file_pickle']=os.path.join(out_dir,'tubes_nn_32.p');
+    
+    params=createParams('toyNNExperiment');
+    params=params(**params_dict);
+    script_toyNNExperiment(params)
+
+
+FOR script_compareHashWithToyExperiment youtube
+    params_dict={};
+    params_dict['in_file']='/disk2/decemberExperiments/toyExample/tubes_nn_big_32.p'
+    params_dict['num_hash_tables_all']=[32,64,128,512,1024]
+    params_dict['key_type']=np.uint16;
+    type_str=str(16)
+    params_dict['out_file_pres']=[params_dict['in_file'][:-2]+'_'+type_str+'_'+str(x) for x in params_dict['num_hash_tables_all']];
+    params_dict['out_file_indices']=params_dict['in_file'][:-2]+'_indices.png'
+    params_dict['out_file_html']=params_dict['in_file'][:-2]+'_'+type_str+'.html';
+    params_dict['rel_path']=['/disk2','../../..'];
+
+    params=createParams('compareHashWithToyExperiment');
+    params=params(**params_dict);
+    script_compareHashWithToyExperiment(params);
+    pickle.dump(params._asdict(),open(params.out_file_html+'_meta_experiment.p','wb'));
+
+
+FOR saveHash youtube
+    hash_file='/disk2/novemberExperiments/experiments_youtube/hasher.npy'
+    # feature_dim=4096;
+    # num_hash_tables=32;
+    # hp_hash=lsh.HyperplaneHash((feature_dim,num_hash_tables),key_type=np.uint8);
+    # np.save(hash_file,hp_hash.hasher);
+
+    # return
+
+    path_to_db='sqlite://///disk2/novemberExperiments/experiments_youtube/patches_nn_test.db';
+    mani=Tube_Manipulator(path_to_db);
+    mani.openSession();
+    deep_features_path=mani.select((Tube.deep_features_path,),distinct=True);
+    deep_features_path=[x[0] for x in deep_features_path]
+    mani.closeSession();    
+    print len(deep_features_path),deep_features_path[:1];
+
+    deep_features_path_all=deep_features_path;
+    args=[];
+    for idx,deep_features_path in enumerate(deep_features_path_all):
+        out_file=deep_features_path[:-4]+'_hash';
+        key_type=np.uint8
+        arg_curr=(hash_file,deep_features_path,out_file,key_type,idx)
+        args.append(arg_curr);
+
+    p = multiprocessing.Pool(multiprocessing.cpu_count()-1)
+    p.map(saveHash,args)
+
+
+FOR script_toyNNExperiment youtube
     path_to_db='sqlite://///disk2/novemberExperiments/experiments_youtube/patches_nn_test.db';
     class_id_pascal='aeroplane';
     video_id=10;

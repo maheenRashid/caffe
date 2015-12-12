@@ -62,6 +62,13 @@ def createScatterOfDiffsAndDistances(diffs,title,xlabel,ylabel,out_file,dists=No
     plt.close();
 
 
+def saveMatAsImage(mat,out_file):
+    plt.figure();
+    plt.imshow(mat);
+    plt.savefig(out_file);
+    plt.close();
+
+
 def createImageAndCaptionGrid(img_paths,gt_labels,indices,text_labels):
     im_paths=[[[] for i in range(indices.shape[1]+1)] for j in range(indices.shape[0])]
     captions=[[[] for i in range(indices.shape[1]+1)] for j in range(indices.shape[0])]

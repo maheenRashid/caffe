@@ -628,7 +628,7 @@ def main():
     params_dict_new['db_path']=params_dict['db_path_out'];
     params_dict_new['class_id']=params_dict['class_id'];
     params_dict_new['angle']=None
-    params_dict_new['diff']=90.0
+    params_dict_new['diff']=180.0
     params_dict_new['delta']=5.0
     params_dict_new['layer']=params_dict['layers']
     params_dict_new['out_file_pre']=os.path.join(out_dir,'rankDifferenceHist');

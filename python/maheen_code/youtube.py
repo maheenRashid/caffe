@@ -414,11 +414,14 @@ def script_compareHashWithToyExperiment(params):
     [features_test,features_train,labels_test,labels_train,_,_,indices,_]=pickle.load(open(in_file,'rb'));
     visualize.saveMatAsImage(indices,out_file_indices);    
     
+    hammings=[];
     for out_file_pre,num_hash_tables in zip(out_file_pres,num_hash_tables_all):
-        
         indices_hash = getIndicesHash(features_test,features_train,num_hash_tables,key_type);
         visualize.saveMatAsImage(indices_hash,out_file_pre+'.png');    
-        pickle.dump([indices_hash,indices],open(out_file_pre+'.p','wb'));
+        hamming=util.getHammingDistance(indices,indices_hash);
+        pickle.dump([indices_hash,indices,hamming],open(out_file_pre+'.p','wb'));
+
+        hammings.append(np.mean(hamming));
     
     sizes = scipy.misc.imread(out_file_indices);
     sizes = sizes.shape
@@ -429,7 +432,7 @@ def script_compareHashWithToyExperiment(params):
         out_file_curr=out_file_pre+'.png'
         key_str=str(key_type);
         key_str=key_str.replace('<type ','').replace('>','');
-        caption_curr='NN Hash. KeyType: '+key_str+' Num Hash Tables: '+str(num_hash_tables_all[idx])
+        caption_curr='NN Hash. Num Hash Tables: '+str(num_hash_tables_all[idx])+' '+'Hamming Distance: '+str(hammings[idx]);
         im_files_html.append([out_file_indices.replace(rel_path[0],rel_path[1]),out_file_curr.replace(rel_path[0],rel_path[1])])
         captions_html.append(['NN cosine',caption_curr]);
 
@@ -437,7 +440,20 @@ def script_compareHashWithToyExperiment(params):
 
 
 def main():
+    # params_file = '/disk2/decemberExperiments/toyExample/tubes_nn_big_32_8.html_meta_experiment.p'
+    # params_dict = pickle.load(open(params_file,'rb'));
+    # params=createParams('compareHashWithToyExperiment');
+    # params=params(**params_dict);
+    # script_compareHashWithToyExperiment(params);
+    # file_curr = params_dict['out_file_pres'][0]+'.p';
+    # for file_curr in params_dict['out_file_pres']:
+    #     indices_hash,indices = pickle.load(open(file_curr+'.p','rb'));
 
+    #     ham_dist_all=np.zeros((indices_hash.shape[0],));
+    #     for row in range(indices_hash.shape[0]):
+    #         ham_dist_all[row]=scipy.spatial.distance.hamming(indices[row],indices_hash[row])
+        
+    #     print file_curr,np.mean(ham_dist_all)
 
     
     return

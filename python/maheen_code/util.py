@@ -1,5 +1,5 @@
 import numpy as np;
-
+import scipy
 
 def getIndexingArray(big_array,small_array):
     small_array=np.array(small_array);
@@ -28,4 +28,10 @@ def normalize(matrix):
     norm=np.expand_dims(norm,1);
     matrix_n=matrix/np.tile(norm,(1,matrix.shape[1]));
     return matrix_n
+
+def getHammingDistance(indices,indices_hash):
+    ham_dist_all=np.zeros((indices_hash.shape[0],));
+    for row in range(indices_hash.shape[0]):
+        ham_dist_all[row]=scipy.spatial.distance.hamming(indices[row],indices_hash[row])
+    return ham_dist_all    
 

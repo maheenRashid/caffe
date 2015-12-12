@@ -371,6 +371,14 @@ def createParams(type_Experiment):
                     'out_file_html',
                     'rel_path']
         params=namedtuple('Params_compareHashWithToyExperiment',list_params);
+    elif type_Experiment=='visualizeNNComparisonWithHash':
+        list_params=['in_file',
+                    'in_file_hash',
+                    'out_file_html',
+                    'rel_path',
+                    'topn',
+                    'img_size'];
+        params=namedtuple('Params_visualizeNNComparisonWithHash',list_params);
     else:
         params=None;
 
@@ -439,23 +447,65 @@ def script_compareHashWithToyExperiment(params):
     visualize.writeHTML(out_file_html,im_files_html,captions_html,sizes[0]/2,sizes[1]/2);
 
 
-def main():
-    # params_file = '/disk2/decemberExperiments/toyExample/tubes_nn_big_32_8.html_meta_experiment.p'
-    # params_dict = pickle.load(open(params_file,'rb'));
-    # params=createParams('compareHashWithToyExperiment');
-    # params=params(**params_dict);
-    # script_compareHashWithToyExperiment(params);
-    # file_curr = params_dict['out_file_pres'][0]+'.p';
-    # for file_curr in params_dict['out_file_pres']:
-    #     indices_hash,indices = pickle.load(open(file_curr+'.p','rb'));
+def getImgPathsAndCaptionsNN(indices,img_paths_test,img_paths_train,labels_test,labels_train,rel_path):
+    img_paths_html=[];
+    captions_html=[];
+    # record_wrong=[]
+    for r in range(indices.shape[0]):
+        img_paths_row=[img_paths_test[r].replace(rel_path[0],rel_path[1])];
+        captions_row=[labels_test[r]];
+        for c in range(indices.shape[1]):
+            rank=indices[r,c];
+            img_paths_row.append(img_paths_train[rank].replace(rel_path[0],rel_path[1]))
+            captions_row.append(labels_train[rank]);
+            # if labels_train[rank]!=labels_test[r]:
+            #     record_wrong.append(c);
+        img_paths_html.append(img_paths_row);
+        captions_html.append(captions_row);
 
-    #     ham_dist_all=np.zeros((indices_hash.shape[0],));
-    #     for row in range(indices_hash.shape[0]):
-    #         ham_dist_all[row]=scipy.spatial.distance.hamming(indices[row],indices_hash[row])
-        
-    #     print file_curr,np.mean(ham_dist_all)
+    return img_paths_html,captions_html
+
+def script_visualizeNNComparisonWithHash(params):
+    in_file = params.in_file
+    in_file_hash = params.in_file_hash
+    out_file_html = params.out_file_html
+    rel_path = params.rel_path
+    topn = params.topn
+    img_size = params.img_size
+
+    [_,_,labels_test,labels_train,img_paths_test,img_paths_train,indices,_]=pickle.load(open(in_file,'rb'));
+    [indices_hash,_,_]=pickle.load(open(in_file_hash,'rb'));
+
+    img_paths_nn,captions_nn=getImgPathsAndCaptionsNN(indices,img_paths_test,img_paths_train,labels_test,labels_train,rel_path)
+    img_paths_hash,captions_hash=getImgPathsAndCaptionsNN(indices_hash,img_paths_test,img_paths_train,labels_test,labels_train,rel_path)
 
     
+    img_paths_all=[];
+    captions_all=[];
+    for idx in range(len(img_paths_nn)):
+        img_paths_all.append(img_paths_nn[idx][:topn]);
+        img_paths_all.append(img_paths_hash[idx][:topn]);
+        captions_all.append([x+' nn' for x in captions_nn[idx][:topn]]);
+        captions_all.append([x+' hash' for x in captions_hash[idx][:topn]]);
+
+    visualize.writeHTML(out_file_html,img_paths_all,captions_all,img_size[0],img_size[1]);
+
+def main():
+    params_dict={};
+    params_dict['in_file']='/disk2/decemberExperiments/toyExample/tubes_nn_32.p'
+    params_dict['in_file_hash']='/disk2/decemberExperiments/toyExample/tubes_nn_32_8_32.p'
+    params_dict['out_file_html']=params_dict['in_file_hash'][:-2]+'_qualitative_comparsion.html';
+    params_dict['rel_path']=['/disk2','../../..'];
+    params_dict['topn']=10;
+    params_dict['img_size']=[200,200];
+    params=createParams('visualizeNNComparisonWithHash');
+    params=params(**params_dict);
+    script_visualizeNNComparisonWithHash(params);
+    pickle.dump(params._asdict(),open(params.out_file_html+'_meta_experiment.p','wb'));
+    
+    
+
+
     return
     path_to_db='sqlite://///disk2/novemberExperiments/experiments_youtube/patches_nn_hash.db';
     mani=Tube_Manipulator(path_to_db);

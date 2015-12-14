@@ -1,3 +1,15 @@
+FOR script_saveHashTableDensities youtube
+    path_to_db='sqlite://///disk2/novemberExperiments/experiments_youtube/patches_nn_hash.db';
+    out_file_pre='/disk2/novemberExperiments/experiments_youtube/patches_nn_hash_densities'
+
+    for hash_table in range(32):
+        out_file=out_file_pre+'_'+str(hash_table)+'.p';
+        print out_file
+        t=time.time();
+        script_saveHashTableDensities(hash_table,path_to_db,out_file);
+        print time.time()-t;
+
+
 FOR script_toyNNExperiment youtube
     out_file_html='/disk2/temp/tubes_nn_16.html';
     params_dict=pickle.load(open(out_file_html+'_meta_experiment.p','rb'));

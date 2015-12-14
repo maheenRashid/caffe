@@ -299,7 +299,6 @@ def getInfoForExtractionForTube(path_to_db,pascal_id,video_id,shot_id,tube_id):
     mani.closeSession();
     return info
 
-
 def script_toyNNExperiment(params):
     path_to_db = params.path_to_db;
     class_id_pascal = params.class_id_pascal;
@@ -379,6 +378,15 @@ def createParams(type_Experiment):
                     'topn',
                     'img_size'];
         params=namedtuple('Params_visualizeNNComparisonWithHash',list_params);
+    elif type_Experiment=='visualizeHashBinDensity':
+        list_params=['hash_tables',
+                    'in_files',
+                    'out_files',
+                    'out_file_html',
+                    'rel_path',
+                    'bins',
+                    'height_width'];
+        params=namedtuple('Params_visualizeHashBinDensity',list_params);
     else:
         params=None;
 
@@ -446,7 +454,6 @@ def script_compareHashWithToyExperiment(params):
 
     visualize.writeHTML(out_file_html,im_files_html,captions_html,sizes[0]/2,sizes[1]/2);
 
-
 def getImgPathsAndCaptionsNN(indices,img_paths_test,img_paths_train,labels_test,labels_train,rel_path):
     img_paths_html=[];
     captions_html=[];
@@ -490,7 +497,134 @@ def script_visualizeNNComparisonWithHash(params):
 
     visualize.writeHTML(out_file_html,img_paths_all,captions_all,img_size[0],img_size[1]);
 
+def script_saveHashTableDensities(hash_table,path_to_db,out_file):
+    
+    mani_hash=TubeHash_Manipulator(path_to_db);
+    mani_hash.openSession();
+
+    toSelect=(TubeHash.hash_val,);
+    criterion=(TubeHash.hash_table==hash_table,);
+    hash_vals=mani_hash.select(toSelect,criterion);
+    
+    mani_hash.closeSession();
+
+    hash_vals=[hash_val[0] for hash_val in hash_vals];
+    hash_vals=np.array(hash_vals,dtype=np.uint8);
+    hash_dict={};
+    for val_curr in np.unique(hash_vals):
+        hash_dict[val_curr]=(hash_vals==val_curr).sum();
+
+    pickle.dump(hash_dict,open(out_file,'wb'));
+
+
+def script_visualizeHashBinDensity(params):
+
+    hash_tables = params.hash_tables
+    in_files = params.in_files
+    out_files = params.out_files
+    out_file_html = params.out_file_html
+    rel_path = params.rel_path
+    bins = params.bins
+    height_width = params.height_width
+
+    min_maxs=[];
+    for file_idx,in_file in enumerate(in_files):
+        densities=pickle.load(open(in_file,'rb'));
+        densities=densities.values();
+        min_maxs.append((min(densities),max(densities)))
+        visualize.hist(densities,out_files[file_idx],bins=bins,normed=True,xlabel='Bin Density',ylabel='Frequency',title="Hash Bins' Density")
+
+    img_files_html=[[out_file.replace(rel_path[0],rel_path[1])] for out_file in out_files];
+    captions_html=[]
+    for idx_hash_table,hash_table in enumerate(hash_tables):
+        caption_curr=str(hash_table)+' '+str(min_maxs[idx_hash_table]);
+        captions_html.append([caption_curr]);
+
+    visualize.writeHTML(out_file_html,img_files_html,captions_html,height_width[0],height_width[1]);
+
+
 def main():
+    
+    out_dir='/disk2/decemberExperiments/analysis_8_32';
+    if not os.path.exists(out_dir):
+        os.mkdir(out_dir);
+
+    params_dict={};
+    params_dict['hash_tables'] = range(32);
+    in_file_pre = '/disk2/novemberExperiments/experiments_youtube/patches_nn_hash_densities'
+    params_dict['in_files'] = [in_file_pre+'_'+str(hash_table)+'.p' for hash_table in params_dict['hash_tables']];
+    params_dict['out_files'] = [os.path.join(out_dir,'densities_'+str(hash_table)+'.png') for hash_table in params_dict['hash_tables']];
+    params_dict['out_file_html'] = os.path.join(out_dir,'densities_all.html');
+    params_dict['rel_path'] = ['/disk2','../../..'];
+    params_dict['bins'] = 20;
+    params_dict['height_width'] = [450,600];
+
+    params=createParams('visualizeHashBinDensity');
+    params=params(**params_dict);
+    script_visualizeHashBinDensity(params);
+    pickle.dump(params._asdict(),open(params.out_file_html+'_meta_experiment.p','wb'));
+
+
+
+
+
+
+
+
+
+    return
+    mani_hash=TubeHash_Manipulator(path_to_db);
+    mani_hash.openSession();
+
+    toSelect=(TubeHash.hash_val,);
+    criterion=(TubeHash.hash_table==1,TubeHash.hash_val<10);
+    
+    # t=time.time();
+    # idx=mani_hash.count(toSelect,criterion);
+    # print time.time()-t;
+
+    t=time.time();
+    hash_vals=mani_hash.select(toSelect,criterion);
+    print time.time()-t;
+
+
+
+    hash_vals=[hash_val[0] for hash_val in hash_vals];
+    hash_vals=np.array(hash_vals,dtype=np.uint8);
+    print hash_vals.shape
+
+    hash_dict={};
+    t=time.time();
+    for val_curr in np.unique(hash_vals):
+        hash_dict[val_curr]=(hash_vals==val_curr).sum();
+    print time.time()-t
+
+    print hash_dict
+
+    from collections import Counter
+
+    t=time.time();
+    hash_dict_counter=Counter(hash_vals)
+    print time.time()-t
+
+    print hash_dict_counter
+    
+    # Counter({1: 3, 8: 1, 3: 1, 4: 1, 5: 1})
+
+
+    mani_hash.closeSession();
+
+    return
+
+    # .p';
+    hash_table=0;
+    out_file=out_file_pre+'_'+str(hash_table)+'.p';
+    script_saveHashTableDensities(path_to_db,out_file,hash_table);
+    # dict_curr=pickle.load(open(out_file,'rb'));
+    # print dict_curr
+    
+
+    return
     params_dict={};
     params_dict['in_file']='/disk2/decemberExperiments/toyExample/tubes_nn_32.p'
     params_dict['in_file_hash']='/disk2/decemberExperiments/toyExample/tubes_nn_32_8_32.p'

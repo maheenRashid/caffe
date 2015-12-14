@@ -1,6 +1,6 @@
 import os
 import sys
-from sqlalchemy import Column, Float, Integer, String,Boolean
+from sqlalchemy import Column, Float, Integer, String,Boolean,func
 from sqlalchemy.dialects.mysql import BLOB as Blob
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy import create_engine,and_
@@ -9,6 +9,8 @@ from sqlalchemy.sql import select
 import sqlalchemy
 from sqlalchemy.schema import ForeignKey
 import numpy as np;
+import time
+import random
 # from tubehash_db import TubeHash
 
 Base = declarative_base()
@@ -252,10 +254,49 @@ class TubeHash_Manipulator(object):
             query=query.limit(limit);
 
         vals=self.session.execute(query);
+        vals=[val for val in vals];
         return vals
 
+    def count(self,criterion=None,distinct=False):
+        if self.session is None:
+            raise Exception('Open a Session First');
+
+        query=select([func.count()],distinct=distinct);
+        if criterion is not None:
+            if len(criterion)==1:
+                query=query.where(*criterion);
+            else:
+                query=query.where(and_(*criterion));
+        
+        if limit is not None:
+            query=query.limit(limit);
+
+        # print query
+        # if countMethod:
+        # count=self.session.query(query).count();
+        # else:
+        # query=func.count(query)
+        count=self.session.execute(query).scalar();
+
+        return count        
+
+
+
 def main():
+
+
+    # mani=TubeHash_Manipulator('sqlite:///temp/Tube.db');
+    # mani.openSession();
+    # for idx in range(1,12):
+    #     for hash_table in range(1,4):
+    #         hash_val=random.randint(1,10);
+    #         mani.insert(idx=idx,hash_table=hash_table,hash_val=hash_val);
+    # mani.closeSession();
     
+    # return
+
+
+    return
     mani=TubeHash_Manipulator('sqlite:///temp/Tube.db');
     mani.openSession();
     mani.insert(idx=0,hash_table=3,hash_val=3);

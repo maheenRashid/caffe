@@ -189,6 +189,19 @@ class Tube_Manipulator(object):
 
         return val_list
 
+    def selectMix(self,toSelect,criterion,limit=None):
+        if self.session is None:
+            raise Exception('Open a Session First');
+
+        query=self.session.query(*toSelect).join(TubeHash,Tube.idx==TubeHash.idx).filter(*criterion)
+        if limit is not None:
+            query=query.limit(limit);
+        vals=self.session.execute(query)
+        vals=[val for val in vals];
+
+        return vals
+
+
 class TubeHash_Manipulator(object):
 
     def __init__(self,path_to_db):
@@ -252,11 +265,23 @@ class TubeHash_Manipulator(object):
         
         if limit is not None:
             query=query.limit(limit);
-
+        
         vals=self.session.execute(query);
         vals=[val for val in vals];
         return vals
 
+    def selectMix(self,toSelect,criterion,limit=None):
+        if self.session is None:
+            raise Exception('Open a Session First');
+
+        query=self.session.query(*toSelect).join(Tube,Tube.idx==TubeHash.idx).filter(*criterion)
+        if limit is not None:
+            query=query.limit(limit);
+        vals=self.session.execute(query)
+        vals=[val for val in vals];
+
+        return vals
+        
     def count(self,criterion=None,distinct=False):
         if self.session is None:
             raise Exception('Open a Session First');
@@ -268,9 +293,6 @@ class TubeHash_Manipulator(object):
             else:
                 query=query.where(and_(*criterion));
         
-        if limit is not None:
-            query=query.limit(limit);
-
         # print query
         # if countMethod:
         # count=self.session.query(query).count();
@@ -285,13 +307,13 @@ class TubeHash_Manipulator(object):
 def main():
 
 
-    # mani=TubeHash_Manipulator('sqlite:///temp/Tube.db');
-    # mani.openSession();
-    # for idx in range(1,12):
-    #     for hash_table in range(1,4):
-    #         hash_val=random.randint(1,10);
-    #         mani.insert(idx=idx,hash_table=hash_table,hash_val=hash_val);
-    # mani.closeSession();
+    mani=Tube_Manipulator('sqlite:///temp/Tube.db');
+    mani.openSession();
+    criterion=(TubeHash.hash_table>1,TubeHash.hash_val>1)
+    toSelect=(Tube.class_id_pascal,)
+    vals_new=mani.selectMix(toSelect,criterion,limit=3);
+    print vals_new
+    mani.closeSession();
     
     # return
 

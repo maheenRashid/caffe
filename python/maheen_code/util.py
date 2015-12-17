@@ -35,3 +35,8 @@ def getHammingDistance(indices,indices_hash):
         ham_dist_all[row]=scipy.spatial.distance.hamming(indices[row],indices_hash[row])
     return ham_dist_all    
 
+def product(arr):
+    p=1;
+    for l in arr:
+        p *= l
+    return p;

@@ -1,3 +1,24 @@
+FOR script_visualizeHashBinDensity youtube
+    out_dir='/disk2/decemberExperiments/analysis_8_32';
+    if not os.path.exists(out_dir):
+        os.mkdir(out_dir);
+
+    params_dict={};
+    params_dict['hash_tables'] = range(32);
+    in_file_pre = '/disk2/novemberExperiments/experiments_youtube/patches_nn_hash_densities'
+    params_dict['in_files'] = [in_file_pre+'_'+str(hash_table)+'.p' for hash_table in params_dict['hash_tables']];
+    params_dict['out_files'] = [os.path.join(out_dir,'densities_'+str(hash_table)+'.png') for hash_table in params_dict['hash_tables']];
+    params_dict['out_file_html'] = os.path.join(out_dir,'densities_all.html');
+    params_dict['rel_path'] = ['/disk2','../../..'];
+    params_dict['bins'] = 20;
+    params_dict['height_width'] = [450,600];
+
+    params=createParams('visualizeHashBinDensity');
+    params=params(**params_dict);
+    script_visualizeHashBinDensity(params);
+    pickle.dump(params._asdict(),open(params.out_file_html+'_meta_experiment.p','wb'));
+
+
 FOR script_saveHashTableDensities youtube
     path_to_db='sqlite://///disk2/novemberExperiments/experiments_youtube/patches_nn_hash.db';
     out_file_pre='/disk2/novemberExperiments/experiments_youtube/patches_nn_hash_densities'

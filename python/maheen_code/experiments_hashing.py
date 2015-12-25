@@ -13,6 +13,10 @@ from tube_db import Tube, Tube_Manipulator,TubeHash_Manipulator,TubeHash
 from collections import namedtuple
 import lsh;
 import matplotlib.pyplot as plt;
+import cudarray as ca
+import nearest_neighbor
+import multiprocessing
+
 
 def createParams(type_Experiment):
     if type_Experiment=='compareHashWithToyExperiment':
@@ -52,6 +56,13 @@ def createParams(type_Experiment):
                     'inc',
                     'dtype']
         params=namedtuple('Params_saveHashAnalysisImages',list_params);
+    elif type_Experiment=='saveBigFeatureMats':
+        list_params=['out_file_featureMats_pre',
+                    'out_file_meta_pre',
+                    'path_to_db',
+                    'out_file_paths',
+                    'num_batches']
+        params = namedtuple('Params_saveBigFeatureMats',list_params);
     else:
         params=None;
 
@@ -282,7 +293,6 @@ def savePerClassCumulativeGraph(cum_freq,idx_perc,percents,out_file,title):
     visualize.plotSimple(xAndYs.values(),out_file,title=title,
         xlabel=xlabel,ylabel=ylabel,legend_entries=xAndYs.keys())
 
-
 def script_saveHashAnalysisImages(params):
     path_to_db = params.path_to_db;
     class_labels_map = params.class_labels_map;
@@ -330,33 +340,186 @@ def script_saveHashAnalysisImages(params):
         title=class_id_pascal[class_id_idx]+' '+str(class_id)        
         cum_freq,idx_perc=getCumulativeInfo(frequency,percents)
         savePerClassCumulativeGraph(cum_freq/float(cum_freq[-1]),idx_perc,percents,out_file,title)
+
+def getGiantFeaturesMatGPU(paths_to_features,feature_type='fc7'):
+    shape_record=[];
+    for idx,path_curr in enumerate(paths_to_features):
+        mat_curr=np.load(path_curr)[feature_type];
+        shape_record.append(mat_curr.shape[0]);
+        mat_curr=mat_curr.reshape(mat_curr.shape[0],mat_curr.shape[1]);
+        if idx==0:
+            train = ca.array(mat_curr);
+        else:
+            train = ca.extra.concatenate(train,ca.array(mat_curr),axis=0);
+    return train,shape_record
+
+def getGiantFeaturesMatNumpy(paths_to_features,feature_type='fc7'):
+    shape_record=[];
+    for idx,path_curr in enumerate(paths_to_features):
+        mat_curr=np.load(path_curr)[feature_type];
+        shape_record.append(mat_curr.shape[0]);
+        mat_curr=mat_curr.reshape(mat_curr.shape[0],mat_curr.shape[1]);
+        if idx==0:
+            train = mat_curr.astype('float32');
+        else:
+            train = np.concatenate((train,mat_curr.astype('float32')),axis=0);
+    return train,shape_record
+
+def getGPUArray(path_curr):
+    mat_curr=np.load(path_curr)['fc7'];
+    mat_curr=mat_curr.reshape(mat_curr.shape[0],mat_curr.shape[1]);
+    test=ca.array(mat_curr);
+    return test
+
+def saveDotProduct((first_shot_path,second_shot_path,out_file,idx)):
+    test = getGPUArray(first_shot_path);
+    train = getGPUArray(second_shot_path);
+    results = nearest_neighbor.getSimpleDot(test,train,gpuFlag=True)
+    np.savez(out_file,results);
+    return True
+
+def script_TEMP_savePairwiseDot(paths_to_features,out_dir_dots):
     
+    print len(paths_to_features);
+    # print paths_to_features[:10]
+    
+    total_paths = len(paths_to_features);
+
+    input_pairs = []
+    
+    for first_shot_idx in range(total_paths):
+        for second_shot_idx in range(first_shot_idx+1,total_paths):
+            first_shot = paths_to_features[first_shot_idx];
+            second_shot = paths_to_features[second_shot_idx];
+            first_video = first_shot[:first_shot.rfind('_')];
+            second_video = second_shot[:second_shot.rfind('_')];
+            if first_video==second_video:
+                continue;
+            else:
+
+                first_path_split=first_shot.split('/');
+                second_path_split=second_shot.split('/');
+
+                first_path=first_path_split[-3]+'_'+first_path_split[-2];
+                second_path=second_path_split[-3]+'_'+second_path_split[-2];
+                out_file=os.path.join(out_dir_dots,first_path+'_'+second_path+'.npz');
+
+                input_pairs.append((first_shot,second_shot,out_file,len(input_pairs)));
+                
+
+    print len(input_pairs);
+    t=time.time();
+    for arg_curr in input_pairs:
+    #     # print arg_curr
+        saveDotProduct(arg_curr);
+    print time.time()-t
+
+def script_saveBigFeatureMats(params):
+    out_file_featureMats_pre=params.out_file_featureMats_pre
+    out_file_meta_pre=params.out_file_meta_pre
+    path_to_db=params.path_to_db
+    out_file_paths=params.out_file_paths
+    num_batches=params.num_batches
+
+    if not os.path.exists(out_file_paths):
+        mani=Tube_Manipulator(path_to_db);
+        mani.openSession()
+        paths_to_features=mani.select((Tube.deep_features_path,),distinct=True);
+        paths_to_features=[path_curr[0] for path_curr in paths_to_features];
+        mani.closeSession();
+
+        random.shuffle(paths_to_features);
+        pickle.dump(paths_to_features,open(out_file_paths,'wb'));
+
+    paths_to_features=pickle.load(open(out_file_paths,'rb'));
+    paths_to_features.sort();
+
+    batch_size=len(paths_to_features)/num_batches;
+    idxRange=util.getIdxRange(len(paths_to_features),batch_size);
+    print len(idxRange),idxRange[-1];
+
+    # start_idx=0;
+    
+    for start_idx in range(len(idxRange)-1):
+        out_file_curr=out_file_featureMats_pre+'_'+str(start_idx)+'.npz';
+        out_file_meta_curr=out_file_meta_pre+'_'+str(start_idx)+'.p';
+        print start_idx,idxRange[start_idx],idxRange[start_idx+1],out_file_curr,out_file_meta_curr,
+        paths_to_features_curr=paths_to_features[idxRange[start_idx]:idxRange[start_idx+1]]
+        
+
+        t=time.time();
+        
+        train,shape_record=getGiantFeaturesMatGPU(paths_to_features_curr);
+        train=np.array(train);
+        
+        np.savez(out_file_curr,train);
+        pickle.dump([paths_to_features_curr,shape_record],open(out_file_meta_curr,'wb'))
+        print time.time()-t
+        break
+
+
+def loadBigFeatureMats(big_feature_files):
+    # print len(big_feature_files)
+    mats=[];
+    # t_big=time.time();
+    for idx,file_curr in enumerate(big_feature_files):
+        mat_curr=np.load(file_curr)['arr_0'];
+        mats.append(mat_curr);
+    # print time.time()-t_big
+    # print len(mats)
+    return mats
+
+def getNNIndicesForBigFeatureMats(test_org,mats):
+    
+    test=ca.array(test_org);
+    distances=[]
+    
+    for idx_mat,mat_curr in enumerate(mats):
+        print idx_mat
+        distances.append(nearest_neighbor.getSimpleDot(test,ca.array(mats[idx_mat]),gpuFlag=True));
+    # print '';
+    
+    distances=np.hstack(tuple(distances));
+    indices=np.argsort(distances,axis=1)[:,::-1].astype(np.uint32)        
+
+    return indices
+
+def getPathsArray(meta_feature_files):
+    paths=[];
+    sizes=[];
+    for file_curr in meta_feature_files:
+        paths_curr,sizes_curr = pickle.load(open(file_curr,'rb'));
+        paths.extend(paths_curr);
+        sizes.extend(sizes_curr);
+
+    paths_scaled=[];
+    for idx,size_curr in enumerate(sizes):
+        paths_scaled.extend([paths[idx]]*size_curr);
+    
+    return np.array(paths_scaled);
+
+def script_getNNIndicesForTestMat(test_paths,big_feature_files,out_paths,featureType='fc7'):
+    assert len(test_paths)==len(out_paths);
+    
+    print 'Loading training feature mats size', len(big_feature_files),
+    t=time.time();
+    mats = loadBigFeatureMats(big_feature_files);
+    print time.time()-t
+
+    for idx,(test_path,out_path) in enumerate(zip(test_paths,out_paths)):
+        print idx+1,'of',len(test_paths)
+        t=time.time();
+        test_mat=np.load(test_path)[featureType];
+        test_mat=test_mat.reshape(test_mat.shape[0],test_mat.shape[1]);
+        indices=getNNIndicesForBigFeatureMats(test_mat,mats);
+        np.savez(out_path,indices)
+        print test_path,out_path,time.time()-t;
+        
+
+
 
 def main():
-    params_dict={};
-    out_dir='/disk2/decemberExperiments/analysis_8_32/detailed'
-    # out_dir='temp'
-    for hashtable in range(1,32):
-        print hashtable
-        t=time.time();
-        out_file_pre='hashtable_'+str(hashtable);
-        params_dict['path_to_db']='sqlite://///disk2/novemberExperiments/experiments_youtube/patches_nn_hash.db';
-        params_dict['class_labels_map']=[('boat', 2), ('train', 9), ('dog', 6), ('cow', 5), ('aeroplane', 0), ('motorbike', 8), ('horse', 7), ('bird', 1), ('car', 3), ('cat', 4)]
-        params_dict['percents']=[0.25,0.5,0.75]
-        params_dict['out_file_class_pre'] =os.path.join(out_dir,out_file_pre);
-        params_dict['out_file_hash_simple'] = os.path.join(out_dir,out_file_pre+'_simple.png');
-        params_dict['out_file_hash_byClass'] = os.path.join(out_dir,out_file_pre+'_byClass.png');
-        params_dict['hashtable'] = hashtable
-        params_dict['inc'] = 5
-        params_dict['dtype']=np.uint8
-        # params_dict['in_file']='temp/hash_1_breakdown.npz'
-        params=createParams('saveHashAnalysisImages');
-        params=params(**params_dict);
-        script_saveHashAnalysisImages(params);
-        pickle.dump(params._asdict(),open(os.path.join(out_dir,out_file_pre+'_meta_experiment.p'),'wb'))
-        print time.time()-t
-
-
+    
     return
     mani_hash=TubeHash_Manipulator(path_to_db);
     mani_hash.openSession();

@@ -23,10 +23,15 @@ def readLinesFromFile(file_name):
     lines=[line.strip('\n') for line in lines];
     return lines
 
-def normalize(matrix):
-    norm=np.sqrt(np.sum(np.square(matrix),1));
-    norm=np.expand_dims(norm,1);
-    matrix_n=matrix/np.tile(norm,(1,matrix.shape[1]));
+def normalize(matrix,gpuFlag=False):
+    if gpuFlag==True:
+        import cudarray as ca
+        norm=ca.sqrt(ca.sum(ca.power(matrix,2),1,keepdims=True));
+        matrix_n=matrix/norm
+    else:
+        norm=np.sqrt(np.sum(np.square(matrix),1,keepdims=True));
+        matrix_n=matrix/norm
+    
     return matrix_n
 
 def getHammingDistance(indices,indices_hash):

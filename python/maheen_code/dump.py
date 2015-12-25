@@ -1,3 +1,90 @@
+FOR script_saveBigFeatureMats experiments_hashing
+
+    out_dir='/disk2/decemberExperiments/gettingNN';
+    out_dir_featureMats=os.path.join(out_dir,'big_feature_mats');
+    
+    if not os.path.exists(out_dir_featureMats):
+        os.mkdir(out_dir_featureMats);
+
+    out_file_featureMats_pre=os.path.join(out_dir_featureMats,'feature_mats');
+    out_file_meta_pre=os.path.join(out_dir_featureMats,'feature_mats_meta');
+
+    path_to_db='sqlite://///disk2/novemberExperiments/experiments_youtube/patches_nn_hash.db';
+    out_file_paths=os.path.join(out_dir,'paths_to_features_shuffled.p');
+    num_batches=50;
+
+    params_dict={};
+    params_dict['out_file_featureMats_pre'] = out_file_featureMats_pre
+    params_dict['out_file_meta_pre'] = out_file_meta_pre
+    params_dict['path_to_db'] = path_to_db
+    params_dict['out_file_paths'] = out_file_paths
+    params_dict['num_batches'] = num_batches
+
+    params=createParams('saveBigFeatureMats');
+    params=params(**params_dict);
+
+    script_saveBigFeatureMats(params);
+
+    pickle.dump(params._asdict(),open(out_file_featureMats_pre+'_meta_experiment.p','wb'));
+
+
+
+FOR saveHashAnalysisImages HTML experiments_hashing
+    out_dir='/disk2/decemberExperiments/analysis_8_32/detailed'
+    out_file_html='/disk2/decemberExperiments/analysis_8_32/detailed.html'
+    img_size=[450,600];
+    rel_path=['/disk2','../../../..'];
+    class_labels_map=[('boat', 2), ('train', 9), ('dog', 6), ('cow', 5), ('aeroplane', 0), ('motorbike', 8), ('horse', 7), ('bird', 1), ('car', 3), ('cat', 4)]
+
+    img_paths=[];
+    captions=[];
+
+    # out_dir='temp'
+    for hashtable in range(32):
+        out_file_pre='hashtable_'+str(hashtable);
+        img_row=[];
+        caption_row=[];
+        img_row.append(os.path.join(out_dir,out_file_pre+'_simple.png'))
+        img_row.append(os.path.join(out_dir,out_file_pre+'_byClass.png'));
+        caption_row.append('Simple sorted bin composition');
+        caption_row.append('Sorted bin composition colored by class');
+        for class_id,class_idx in class_labels_map:
+            file_curr=os.path.join(out_dir,out_file_pre+'_'+class_id+'.png');
+            img_row.append(file_curr);
+            caption_row.append(class_id);
+
+        img_row=[img_curr.replace(rel_path[0],rel_path[1]) for img_curr in img_row];
+        img_paths.append(img_row);
+        captions.append(caption_row);
+
+    visualize.writeHTML(out_file_html,img_paths,captions,img_size[0],img_size[1]);
+
+    
+FOR script_saveHashAnalysisImages experiments_hashing
+    params_dict={};
+    out_dir='/disk2/decemberExperiments/analysis_8_32/detailed'
+    # out_dir='temp'
+    for hashtable in range(1,32):
+        print hashtable
+        t=time.time();
+        out_file_pre='hashtable_'+str(hashtable);
+        params_dict['path_to_db']='sqlite://///disk2/novemberExperiments/experiments_youtube/patches_nn_hash.db';
+        params_dict['class_labels_map']=[('boat', 2), ('train', 9), ('dog', 6), ('cow', 5), ('aeroplane', 0), ('motorbike', 8), ('horse', 7), ('bird', 1), ('car', 3), ('cat', 4)]
+        params_dict['percents']=[0.25,0.5,0.75]
+        params_dict['out_file_class_pre'] =os.path.join(out_dir,out_file_pre);
+        params_dict['out_file_hash_simple'] = os.path.join(out_dir,out_file_pre+'_simple.png');
+        params_dict['out_file_hash_byClass'] = os.path.join(out_dir,out_file_pre+'_byClass.png');
+        params_dict['hashtable'] = hashtable
+        params_dict['inc'] = 5
+        params_dict['dtype']=np.uint8
+        # params_dict['in_file']='temp/hash_1_breakdown.npz'
+        params=createParams('saveHashAnalysisImages');
+        params=params(**params_dict);
+        script_saveHashAnalysisImages(params);
+        pickle.dump(params._asdict(),open(os.path.join(out_dir,out_file_pre+'_meta_experiment.p'),'wb'))
+        print time.time()-t
+
+
 FOR script_visualizeHashBinDensity youtube
     out_dir='/disk2/decemberExperiments/analysis_8_32';
     if not os.path.exists(out_dir):

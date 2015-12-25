@@ -4,10 +4,11 @@ import sklearn.neighbors
 import util
 import numpy as np
 import time
-import pycuda.autoinit
-import pycuda.gpuarray
-import skcuda.linalg
-skcuda.linalg.init();
+import cudarray as ca
+# import pycuda.autoinit
+# import pycuda.gpuarray
+# import skcuda.linalg
+# skcuda.linalg.init();
 
 def doCosineDistanceNN(features_curr,numberOfN=5,binarize=False):
     feature_len=1;
@@ -37,23 +38,36 @@ def doCosineDistanceNN(features_curr,numberOfN=5,binarize=False):
 
     return indices,distances
 
-def getNearestNeighbors(query,data,gpuFlag=False):
+def getNearestNeighbors(query,data,gpuFlag=False,normalize=True):
 
-    query_n=util.normalize(query);
-    train_n=util.normalize(data);
+    distances = getSimpleDot(query,data,gpuFlag=gpuFlag,normalize=normalize)
+    # query_n=util.normalize(query,gpuFlag=gpuFlag);
+    # train_n=util.normalize(data,gpuFlag=gpuFlag);
         
-    if not gpuFlag:
-        distances=np.dot(query_n,train_n.T);
+    # if not gpuFlag:
+    #     distances=np.dot(query_n,train_n.T);
+    # else:
+    #     train_n=np.ascontiguousarray(train_n.T);
+    #     query_n=pycuda.gpuarray.to_gpu(query_n);
+    #     train_n=pycuda.gpuarray.to_gpu(train_n);
+    #     distances_gpu=skcuda.linalg.dot(query_n,train_n);
         
-    else:
-        train_n=np.ascontiguousarray(train_n.T);
-        query_n=pycuda.gpuarray.to_gpu(query_n);
-        train_n=pycuda.gpuarray.to_gpu(train_n);
-        distances_gpu=skcuda.linalg.dot(query_n,train_n);
-        distances=np.zeros(distances_gpu.shape,dtype=distances_gpu.dtype);
-        distances_gpu.get(distances);
+    #     distances=np.zeros(distances_gpu.shape,dtype=distances_gpu.dtype);
+    #     distances_gpu.get(distances);
     
     indices=np.argsort(distances,axis=1)[:,::-1]
     distances=(1-np.sort(distances,axis=1))[:,::-1];        
     return indices,distances
 
+def getSimpleDot(test,train,gpuFlag=False,normalize=True):
+    if normalize:
+        test = util.normalize(test,gpuFlag=gpuFlag);
+        train = util.normalize(train,gpuFlag=gpuFlag);
+
+    if gpuFlag:
+        distances=ca.dot(test,ca.transpose(train));
+        distances=np.array(distances);
+    else:
+        distances=np.dot(test,train.T);
+    
+    return distances

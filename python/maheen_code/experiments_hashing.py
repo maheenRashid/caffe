@@ -63,6 +63,19 @@ def createParams(type_Experiment):
                     'out_file_paths',
                     'num_batches']
         params = namedtuple('Params_saveBigFeatureMats',list_params);
+    elif type_Experiment == 'scoreRandomFrames':
+        list_params=['path_to_db',
+                    'class_labels_map',
+                    'npz_path',
+                    'numberOfFrames',
+                    'max_idx',
+                    'n_jobs',
+                    'table_idx_all',
+                    'out_file_html',
+                    'rel_path',
+                    'width_height',
+                    'out_file_frames']
+        params = namedtuple('Params_scoreRandomFrames',list_params);
     else:
         params=None;
 
@@ -457,7 +470,6 @@ def script_saveBigFeatureMats(params):
         print time.time()-t
         break
 
-
 def loadBigFeatureMats(big_feature_files):
     # print len(big_feature_files)
     mats=[];
@@ -514,74 +526,229 @@ def script_getNNIndicesForTestMat(test_paths,big_feature_files,out_paths,feature
         indices=getNNIndicesForBigFeatureMats(test_mat,mats);
         np.savez(out_path,indices)
         print test_path,out_path,time.time()-t;
+
+# def getScoreForHashValLongerMethod(hash_table,hash_val,class_idx,video_idx):
+
+#     t=time.time();
+#     toSelect=(TubeHash.idx,)
+#     criterion=(TubeHash.hash_table==hash_table,TubeHash.hash_val==hash_val);
+#     total_count=mani_hash.count(toSelect=toSelect,criterion=criterion,distinct=True);
+#     print 'total_count',total_count, time.time()-t
+    
+#     t=time.time();
+#     toSelect=(TubeHash.idx,);
+#     criterion=(TubeHash.hash_table==hash_table,TubeHash.hash_val==hash_val,Tube.class_idx_pascal==class_idx,Tube.video_id==video_idx);
+#     video_count=mani_hash.count(toSelect,criterion,mix=True);
+#     print 'count same video',video_count,time.time()-t
+
+#     t=time.time();
+#     toSelect=(TubeHash.idx,);
+#     criterion=(TubeHash.hash_table==hash_table,TubeHash.hash_val==hash_val,Tube.class_idx_pascal==class_idx);
+#     class_count=mani_hash.count(toSelect,criterion,mix=True);
+#     print 'count same class',class_count,time.time()-t
+
+#     #get the class id score
+#     class_count=class_count-video_count;
+#     total_count=total_count-video_count;
+#     score=class_count/float(total_count);
+#     print 'score',score;
+
+#     return score;
+
+# def getScoreForHashVal((path_to_db,hash_table,hash_val,class_idx,video_idx,class_idx_gt)):
+#     mani=Tube_Manipulator(path_to_db);
+#     mani.openSession();
+#     toSelect=(Tube.class_idx_pascal,Tube.video_id)
+#     criterion=(TubeHash.hash_table==hash_table,TubeHash.hash_val==hash_val);
+#     vals=mani.selectMix(toSelect=toSelect,criterion=criterion);
+#     vals=np.array(vals);
+
+#     if not hasattr(class_idx,'__iter__'):
+#         class_idx=[class_idx];
+    
+#     total_count_total=vals.shape[0];
+#     video_count_total=sum(np.logical_and(vals[:,0]==class_idx_gt,vals[:,1]==video_idx));
+
+#     scores=[];
+#     for class_idx_curr in class_idx:
+#         class_count=sum(vals[:,0]==class_idx_curr);
+#         if class_idx_curr==class_idx_gt:
+#             video_count=video_count_total;
+#         else:
+#             video_count=0;
+
+#         class_count=class_count-video_count;
+#         total_count=total_count_total-video_count_total;
+#         score=class_count/float(total_count);
+#         scores.append(score);
+
+#     mani.closeSession();
+#     return scores;
+
+# def getScoreForIdx(table_idx,path_to_db,class_idx_pascal=None,npz_path=None,n_jobs=1):
+    
+#     mani=Tube_Manipulator(path_to_db);
+#     mani.openSession();
+
+#     mani_hash=TubeHash_Manipulator(path_to_db);
+#     mani_hash.openSession();
+
+#     toSelect = (Tube.class_idx_pascal,Tube.video_id,Tube.frame_path)
+#     criterion = (Tube.idx==table_idx,);
+#     [(class_idx_gt,video_idx,frame_path)] = mani.select(toSelect,criterion)
+
+#     if class_idx_pascal is not None:
+#         class_idx=class_idx_pascal;
+#     else:
+#         class_idx=class_idx_gt
+
+#     toSelect=(TubeHash.hash_table,TubeHash.hash_val);
+#     criterion=(TubeHash.idx==table_idx,)
+#     hash_table_info=mani_hash.select(toSelect,criterion);
+#     print len(hash_table_info);
+#     mani_hash.closeSession();
+#     mani.closeSession();
+
+#     args=[];
+    
+#     for hash_table_no in range(len(hash_table_info)):
+#         hash_table=hash_table_info[hash_table_no][0];
+#         hash_val=hash_table_info[hash_table_no][1];
+#         if npz_path is not None:
+#             args.append((npz_path,hash_table,hash_val,class_idx,video_idx,class_idx_gt));
+#         else:
+#             args.append((path_to_db,hash_table,hash_val,class_idx,video_idx,class_idx_gt));
+            
+#     if n_jobs>1:
+#         p = multiprocessing.Pool(min(multiprocessing.cpu_count(),n_jobs))
+#         if npz_path is not None:
+#             scores=p.map(getScoreForHashValFromNpz,args)
+#         else:
+#             scores=p.map(getScoreForHashVal,args)
+#     else:
+#         scores=[];
+#         for arg in args:
+#             if npz_path is not None:
+#                 scores.append(getScoreForHashValFromNpz(arg));
+#             else:
+#                 scores.append(getScoreForHashVal(arg));
+    
+#     return scores,class_idx_gt,frame_path
+
+# def getScoreForHashValFromNpz((npz_path,hash_table,hash_val,class_idx,video_idx,class_idx_gt)):
+#     fname=os.path.join(npz_path,str(hash_table)+'_'+str(hash_val)+'.npz');
+#     vals=np.load(fname)['arr_0'];
+
+#     if not hasattr(class_idx,'__iter__'):
+#         class_idx=[class_idx];
+
+#     total_count_total=vals.shape[0];
+
+#     video_count_total=sum(np.logical_and(vals[:,1]==class_idx_gt,vals[:,2]==video_idx));
+
+#     scores=[];
+#     for class_idx_curr in class_idx:
+#         class_count=sum(vals[:,1]==class_idx_curr);
         
+#         # total_count=vals.shape[0];
+#         class_count=sum(vals[:,1]==class_idx_curr);
+#         if class_idx_curr==class_idx_gt:
+#             video_count=video_count_total
+#         else:
+#             video_count=0;
+
+#         class_count=class_count-video_count;
+#         total_count=total_count_total-video_count_total;
+#         score=class_count/float(total_count);
+#         scores.append(score);
+#     # print 'score',score;
+#     return scores;
+
+def script_writeCommandsForSavingHashValsNpz():
+    out_dir='/disk2/decemberExperiments/hash_tables';
+    
+    if not os.path.exists(out_dir):
+        os.mkdir(out_dir);
+
+    path_to_db='sqlite://///disk2/novemberExperiments/experiments_youtube/patches_nn_hash.db';
+
+    out_file=os.path.join(out_dir,'commands_list.txt');
+    file_script='/home/maheenrashid/Downloads/caffe/caffe-rc2/python/maheen_code/script_saveHashValsNpz.py';
+    commands=[];
+    for hash_table in range(32):
+        for hash_val in range(256):
+            command=[];
+            command.append('python');
+            command.append(file_script);
+            command.append(path_to_db);
+            command.append(out_dir)
+            command.append(str(hash_table));
+            command.append(str(hash_val));
+            command=' '.join(command);
+            commands.append(command);
+
+    with open(out_file,'wb') as f:
+        for command in commands:
+            f.write(command+'\n');
 
 
+# def script_scoreRandomFrames(params):
+    path_to_db = params.path_to_db
+    class_labels_map = params.class_labels_map
+    npz_path = params.npz_path
+    numberOfFrames = params.numberOfFrames
+    max_idx = params.max_idx
+    n_jobs = params.n_jobs
+    table_idx_all = params.table_idx_all
+    out_file_html = params.out_file_html
+    rel_path = params.rel_path
+    width_height = params.width_height
+    out_file_frames = params.out_file_frames
+    
+    [class_labels,class_idx]=zip(*class_labels_map)
+
+    if not os.path.exists(out_file_frames):
+        frames_all=[];
+        for table_idx in table_idx_all:
+            scores,class_idx_curr,frame_path=getScoreForIdx(table_idx,path_to_db,class_idx_pascal=class_idx,npz_path=npz_path,n_jobs=n_jobs);
+            
+            frames_all.append([frame_path,class_idx_curr,scores]);
+
+        pickle.dump(frames_all,open(out_file_frames,'wb'));
+
+    frames_all=pickle.load(open(out_file_frames,'rb'));
+
+    img_paths = [];
+    captions = []
+    for frame_path,class_idx_curr,scores in frames_all:
+
+        scores=np.array(scores);
+        avg_scores=np.mean(scores,axis=0);
+        gt_idx=class_idx.index(class_idx_curr);
+        gt_score=avg_scores[gt_idx];
+        sort_idx=np.argsort(avg_scores)[::-1];
+        max_idx=sort_idx[0];
+        max_score=avg_scores[max_idx];
+        max_class_idx=class_idx[max_idx];
+        gt_rank=np.where(sort_idx==gt_idx)[0][0];
+
+        caption_curr=[];
+        caption_curr.append('GT');
+        caption_curr.append(class_labels[class_idx.index(class_idx_curr)]);
+        caption_curr.append(str(round(gt_score,4)));
+        caption_curr.append(str(gt_rank+1));
+        caption_curr.append('Best');
+        caption_curr.append(class_labels[max_idx]);
+        caption_curr.append(str(round(max_score,4)));
+
+        caption_curr=' '.join(caption_curr)
+
+        img_paths.append([frame_path.replace(rel_path[0],rel_path[1])]);
+        captions.append([caption_curr]);
+
+    visualize.writeHTML(out_file_html,img_paths,captions,width_height[0],width_height[1]);
 
 def main():
-    
-    return
-    mani_hash=TubeHash_Manipulator(path_to_db);
-    mani_hash.openSession();
-
-    toSelect=(TubeHash.hash_val,);
-    criterion=(TubeHash.hash_table==1,TubeHash.hash_val<10);
-    
-   
-    t=time.time();
-    hash_vals=mani_hash.select(toSelect,criterion);
-    print time.time()-t;
-
-
-
-    hash_vals=[hash_val[0] for hash_val in hash_vals];
-    hash_vals=np.array(hash_vals,dtype=np.uint8);
-    print hash_vals.shape
-
-    hash_dict={};
-    t=time.time();
-    for val_curr in np.unique(hash_vals):
-        hash_dict[val_curr]=(hash_vals==val_curr).sum();
-    print time.time()-t
-
-    print hash_dict
-
-    from collections import Counter
-
-    t=time.time();
-    hash_dict_counter=Counter(hash_vals)
-    print time.time()-t
-
-    print hash_dict_counter
-    
-    # Counter({1: 3, 8: 1, 3: 1, 4: 1, 5: 1})
-
-
-    mani_hash.closeSession();
-
-    return
-
-    # .p';
-    hash_table=0;
-    out_file=out_file_pre+'_'+str(hash_table)+'.p';
-    script_saveHashTableDensities(path_to_db,out_file,hash_table);
-    # dict_curr=pickle.load(open(out_file,'rb'));
-    # print dict_curr
-    
-
-    return
-    params_dict={};
-    params_dict['in_file']='/disk2/decemberExperiments/toyExample/tubes_nn_32.p'
-    params_dict['in_file_hash']='/disk2/decemberExperiments/toyExample/tubes_nn_32_8_32.p'
-    params_dict['out_file_html']=params_dict['in_file_hash'][:-2]+'_qualitative_comparsion.html';
-    params_dict['rel_path']=['/disk2','../../..'];
-    params_dict['topn']=10;
-    params_dict['img_size']=[200,200];
-    params=createParams('visualizeNNComparisonWithHash');
-    params=params(**params_dict);
-    script_visualizeNNComparisonWithHash(params);
-    pickle.dump(params._asdict(),open(params.out_file_html+'_meta_experiment.p','wb'));
-    
     
 
 

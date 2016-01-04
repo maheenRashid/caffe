@@ -4,6 +4,8 @@ from sqlalchemy import Column, Float, Integer, String,Boolean,func
 from sqlalchemy.dialects.mysql import BLOB as Blob
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy import create_engine,and_
+import sqlalchemy
+# distinct
 from sqlalchemy.orm import sessionmaker,relationship
 from sqlalchemy.sql import select
 import sqlalchemy
@@ -201,6 +203,25 @@ class Tube_Manipulator(object):
 
         return vals
 
+    def count(self,toSelect=None,criterion=None,distinct=False,mix=False):
+        if self.session is None:
+            raise Exception('Open a Session First');
+
+        if distinct:
+            query=self.session.query(sqlalchemy.distinct(*toSelect))
+        else:
+            query=self.session.query(*toSelect)
+
+        if mix:
+            query=query.join(TubeHash,Tube.idx==TubeHash.idx)
+        
+        if criterion is not None:
+            query=query.filter(*criterion)
+        # print query
+        count=query.count();
+       
+        return count        
+
 
 class TubeHash_Manipulator(object):
 
@@ -270,36 +291,43 @@ class TubeHash_Manipulator(object):
         vals=[val for val in vals];
         return vals
 
-    def selectMix(self,toSelect,criterion,limit=None):
+    def selectMix(self,toSelect,criterion,limit=None,distinct=False):
         if self.session is None:
             raise Exception('Open a Session First');
+        
+        if distinct:
+            query=self.session.query(sqlalchemy.distinct(*toSelect))
+        else:
+            query=self.session.query(*toSelect)
 
-        query=self.session.query(*toSelect).join(Tube,Tube.idx==TubeHash.idx).filter(*criterion)
+        query=query.join(Tube,Tube.idx==TubeHash.idx).filter(*criterion)
+
         if limit is not None:
             query=query.limit(limit);
+        # print query
         vals=self.session.execute(query)
+        
         vals=[val for val in vals];
 
         return vals
         
-    def count(self,criterion=None,distinct=False):
+    def count(self,toSelect=None,criterion=None,distinct=False,mix=False):
         if self.session is None:
             raise Exception('Open a Session First');
 
-        query=select([func.count()],distinct=distinct);
-        if criterion is not None:
-            if len(criterion)==1:
-                query=query.where(*criterion);
-            else:
-                query=query.where(and_(*criterion));
-        
-        # print query
-        # if countMethod:
-        # count=self.session.query(query).count();
-        # else:
-        # query=func.count(query)
-        count=self.session.execute(query).scalar();
+        if distinct:
+            query=self.session.query(sqlalchemy.distinct(*toSelect))
+        else:
+            query=self.session.query(*toSelect)
 
+        if mix:
+            query=query.join(Tube,Tube.idx==TubeHash.idx)
+        
+        if criterion is not None:
+            query=query.filter(*criterion)
+        # print query
+        count=query.count();
+       
         return count        
 
 
@@ -307,12 +335,18 @@ class TubeHash_Manipulator(object):
 def main():
 
 
-    mani=Tube_Manipulator('sqlite:///temp/Tube.db');
+    mani=TubeHash_Manipulator('sqlite:///temp/Tube.db');
     mani.openSession();
     criterion=(TubeHash.hash_table>1,TubeHash.hash_val>1)
-    toSelect=(Tube.class_id_pascal,)
-    vals_new=mani.selectMix(toSelect,criterion,limit=3);
-    print vals_new
+    # ,Tube.video_id==0)
+    toSelect=(TubeHash.idx,)
+    distinct=True
+    count_new=mani.count(toSelect,criterion,mix=False,distinct=distinct);
+    print count_new
+    vals_new=mani.selectMix(toSelect,criterion,distinct=distinct);
+    print vals_new,len(vals_new)
+    vals_new=mani.select(toSelect,criterion,distinct=distinct);
+    print vals_new,len(vals_new)
     mani.closeSession();
     
     # return

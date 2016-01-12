@@ -109,9 +109,9 @@ def plotDistanceHistograms(diffs_curr,degree,out_file,title='',xlabel='Distance 
     plt.savefig(out_file);
     plt.close();
 
-def hist(dists,out_file,bins=10,normed=True,xlabel='Value',ylabel='Frequency',title=''):
+def hist(dists,out_file,bins=10,normed=True,xlabel='Value',ylabel='Frequency',title='',cumulative=False):
     plt.figure();
-    plt.hist(dists,bins,normed=normed);
+    plt.hist(dists,bins,normed=normed,cumulative=cumulative);
     plt.title(title);
     plt.xlabel(xlabel);
     plt.ylabel(ylabel);

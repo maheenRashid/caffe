@@ -457,9 +457,11 @@ def script_saveNpzScorePerShot(params):
     vals=np.array(vals_org[:,1:],dtype=int);
     # Tube.tube_id,Tube.deep_features_idx,TubeHash.hash_table,TubeHash.hash_val
     tube_ids=np.unique(vals[:,0])    
-    deep_features_idx=np.unique(vals[:,1]);
+    # deep_features_idx=np.unique(vals[:,1]);
     tube_scores_all={};
     for tube_id in tube_ids:
+        # print tube_id,len(deep_features_idx),len(np.unique(vals[vals[:,0]==tube_id,1]));
+        deep_features_idx=np.unique(vals[vals[:,0]==tube_id,1])
         tube_scores_all[tube_id]=getTubeScoresMat(tube_id,vals,hash_bin_scores,deep_features_idx,num_hash_tables);
     # print time.time()-t;
 
@@ -549,59 +551,141 @@ def saveAverageScoresInfo(score_files,out_file):
     pickle.dump([score_files,score_files_info],open(out_file,'wb'));
 
 
-def main():
-    
-    path_to_db='sqlite://///disk2/novemberExperiments/experiments_youtube/patches_nn_hash.db';
-    score_dir='/disk2/decemberExperiments/shot_scores';
-    out_dir='/disk2/decemberExperiments/shot_scores_analysis';
-    
-    path_to_patches='/disk2/res11/tubePatches';
-    class_labels_map = [('boat', 2), ('train', 9), ('dog', 6), ('cow', 5), ('aeroplane', 0), ('motorbike', 8), ('horse', 7), ('bird', 1), ('car', 3), ('cat', 4)]
-    [class_labels,class_idx_all]=zip(*class_labels_map);
-    
-    for selected_class in [0,1,2,4,5,6,7,8,9]:
-    
-        out_file=os.path.join(out_dir,'all_scores_patches_'+class_labels[class_idx_all.index(selected_class)]+'.p')
-        print out_file
 
-        score_files=[os.path.join(score_dir,file_curr) for file_curr in os.listdir(score_dir) if file_curr.endswith('.p') and file_curr.startswith(str(selected_class)+'_')];
+def visualizeRankedPatchesPerClass(class_score_info,num_to_display,out_file_html,rel_path,height_width):
+    
+    img_paths_all=[];
+    captions_all=[];
+    
+    for selected_class,class_label,out_file in class_score_info:
+        [list_scores,list_files] = pickle.load(open(out_file,'rb'));
+        num_patches=len(list_files);
+        print len(list_scores),len(list_files);
         
-        print len(score_files);
-        list_scores=[];
-        list_files=[];
+        if len(list_scores)!=len(list_files):
+            print 'continuing'
+            continue;
+        
+        list_scores=np.array(list_scores);
+        sort_idx=np.argsort(list_scores)[::-1];
 
-        for idx_file_curr,file_curr in enumerate(score_files):
-            print idx_file_curr,file_curr
-            file_name=file_curr[file_curr.rindex('/')+1:file_curr.rindex('.')];
-            class_idx=int(file_name[:file_name.index('_')]);
-            video_id=int(file_name[file_name.index('_')+1:file_name.rindex('_')]);
-            shot_id=int(file_name[file_name.rindex('_')+1:]);
+        list_scores_sorted=list_scores[sort_idx]
 
-            scores = pickle.load(open(file_curr,'rb'));
+        list_files=np.array(list_files);
+        list_files_sorted=list_files[sort_idx];
+        
+        idx_display=np.linspace(0,num_patches-1,num_to_display,dtype=int);
 
-            shot_string = class_labels[class_idx_all.index(class_idx)];
-            shot_string = os.path.join(path_to_patches,shot_string+'_'+str(video_id)+'_'+str(shot_id));
+        img_paths=list(list_files_sorted[idx_display]);
+        img_paths=[img_path.replace(rel_path[0],rel_path[1]) for img_path in img_paths];
+        
+        scores_picked=list_scores_sorted[idx_display];
+
+        captions=[];
+        for idx_idx_curr,idx_curr in enumerate(idx_display):
+            score_curr=round(scores_picked[idx_idx_curr],5)
+            caption_curr=str(idx_idx_curr)+' Rank '+str(idx_curr+1)+' of '+str(num_patches)+' Score: '+str(score_curr);
+            caption_curr=class_label+' '+caption_curr;
+            captions.append(caption_curr);
+        # captions=[[list_scores[sort_idx[idx_curr]],5))] for idx_idx_curr,idx_curr in enumerate(idx_display)]
+        # print captions
+        img_paths_all.append(img_paths);
+        captions_all.append(captions);
+
+    img_paths_all=np.array(img_paths_all).T
+    captions_all=np.array(captions_all).T
+    visualize.writeHTML(out_file_html,img_paths_all,captions_all,height_width[0],height_width[0]);
+    print out_file_html
+
+
+def getListScoresAndPatches(score_files,class_label,path_to_patches):
+    print len(score_files);
+    list_scores=[];
+    list_files=[];
+
+    for idx_file_curr,file_curr in enumerate(score_files):
+        print idx_file_curr,file_curr
+        file_name=file_curr[file_curr.rindex('/')+1:file_curr.rindex('.')];
+        class_idx=int(file_name[:file_name.index('_')]);
+        video_id=int(file_name[file_name.index('_')+1:file_name.rindex('_')]);
+        shot_id=int(file_name[file_name.rindex('_')+1:]);
+
+        scores = pickle.load(open(file_curr,'rb'));
+
+        shot_string = class_label
+        # class_labels[class_idx_all.index(class_idx)];
+        shot_string = os.path.join(path_to_patches,shot_string+'_'+str(video_id)+'_'+str(shot_id));
+        
+        for tube_id in scores:
+            scores_curr = scores[tube_id];
+            scores_curr = np.mean(scores_curr,axis=1);
+            list_scores.extend(list(scores_curr))
             
-            for tube_id in scores:
-                scores_curr = scores[tube_id];
-                scores_curr = np.mean(scores_curr,axis=1);
-                list_scores.extend(list(scores_curr))
-                
-                txt_file = os.path.join(path_to_patches,shot_string,str(tube_id),str(tube_id)+'.txt');
-                patch_paths = util.readLinesFromFile(txt_file)
-                list_files.extend(patch_paths);
+            txt_file = os.path.join(path_to_patches,shot_string,str(tube_id),str(tube_id)+'.txt');
+            patch_paths = util.readLinesFromFile(txt_file)
+            assert len(patch_paths)==scores_curr.shape[0]
+            list_files.extend(patch_paths);
 
-        pickle.dump([list_scores,list_files],open(out_file,'wb'));
+    return list_scores,list_files
 
+def script_fixHorseCountError(path_to_record):
+    record=pickle.load(open(path_to_record,'rb'))
+    [txt_files,score_files,tube_ids,scores_size,patch_paths_size]=zip(*record);
 
+    for idx,t in enumerate(txt_files):
+        score_file=score_files[idx];
+        tube_id=tube_ids[idx]
+        
+        scores_all=pickle.load(open(score_file,'rb'));
+        scores=scores_all[tube_id];
+        
+        scores_size_curr=scores_size[idx];
+        patch_paths_size_curr=patch_paths_size[idx];
+        diff=scores_size_curr-patch_paths_size_curr
 
+        top = scores[:patch_paths_size_curr,:]
+        bottom =scores[patch_paths_size_curr:,:];
+        
 
+        top_nan_count=np.sum(np.isnan(top))
+        bottom_nan_count=np.sum(np.isnan(bottom))
 
+        assert diff>0;
+        assert top.shape[0]+bottom.shape[0]==scores.shape[0];
+        assert bottom.shape[0]==diff;
+        assert bottom_nan_count==bottom.size
+        assert bottom_nan_count==diff*num_hash_tables
+        assert top_nan_count==0;
 
+        scores_all[tube_id]=top;
+        pickle.dump(scores_all,open(score_file,'wb'));
 
-    
+def saveRecordOfCountErrorFiles(score_files,class_label,path_to_patches,out_file):
+    record=[];
+    for idx_file_curr,file_curr in enumerate(score_files):
+        print idx_file_curr,len(score_files)
+        file_name=file_curr[file_curr.rindex('/')+1:file_curr.rindex('.')];
+        class_idx=int(file_name[:file_name.index('_')]);
+        video_id=int(file_name[file_name.index('_')+1:file_name.rindex('_')]);
+        shot_id=int(file_name[file_name.rindex('_')+1:]);
 
+        scores = pickle.load(open(file_curr,'rb'));
 
+        shot_string = class_label
+        # class_labels[class_idx_all.index(class_idx)];
+        shot_string = os.path.join(path_to_patches,shot_string+'_'+str(video_id)+'_'+str(shot_id));
+        
+        for tube_id in scores:
+            scores_curr = scores[tube_id];
+            txt_file = os.path.join(path_to_patches,shot_string,str(tube_id),str(tube_id)+'.txt');
+            patch_paths = util.readLinesFromFile(txt_file)
+            if scores_curr.shape[0]!=len(patch_paths):
+                print 'PROBLEM'
+                record.append((txt_file,file_curr,tube_id,scores_curr.shape[0],len(patch_paths)));
+    print len(record)
+    pickle.dump(record,open(out_file,'wb'));
+
+def main():
     # print score_files_info
         # mani=Tube_Manipulator(path_to_db);
         # mani.openSession();
@@ -635,107 +719,6 @@ def main():
     # print best_frame_path.replace('/disk2','http://vision3.cs.ucdavis.edu:1000/');
     # print 'worst_frame_path',worst_frame_path
     # print worst_frame_path.replace('/disk2','http://vision3.cs.ucdavis.edu:1000/');
-
-
-
-    return
-    out_dir='/disk2/decemberExperiments/shot_scores';
-    if not os.path.exists(out_dir):
-        os.mkdir(out_dir);
-
-
-    path_to_db='sqlite://///disk2/novemberExperiments/experiments_youtube/patches_nn_hash.db';
-    mani=TubeHash_Manipulator(path_to_db);
-    mani.openSession();
-    vals = mani.select((Tube.class_idx_pascal,Tube.video_id,Tube.shot_id),distinct=True);
-    # deep_features_path = mani.select((Tube.deep_features_path,),distinct= True);
-    mani.closeSession();
-
-    params_dict = {};
-    params_dict['total_class_counts'] = {0: 622034, 1: 245763, 2: 664689, 3: 125286, 4: 311316, 5: 500093, 6: 889816, 7: 839481, 8: 358913, 9: 1813897};
-    params_dict['path_to_db'] = 'sqlite://///disk2/novemberExperiments/experiments_youtube/patches_nn_hash.db'
-    params_dict['path_to_hash'] = '/disk2/decemberExperiments/hash_tables'
-    params_dict['num_hash_tables'] = 32
-
-    # params_obj=createParams('saveNpzScorePerShot');
-    params_all=[];
-    for idx_val,val in enumerate(vals):
-        params_dict['class_idx'] =  val[0];
-        params_dict['video_id'] =  val[1];
-        params_dict['shot_id'] =  val[2]
-        params_dict['out_file_scores'] =  os.path.join(out_dir,'_'.join(map(str,val))+'.p')
-        params_dict['idx']=idx_val
-        # params=params_obj(**params_dict);
-        # params_all.append(params);
-        params_all.append(copy.deepcopy(params_dict))
-
-    print len(params_all);
-    p = multiprocessing.Pool(multiprocessing.cpu_count())
-    p.map(script_saveNpzScorePerShot,params_all)
-
-        
-
-    return
-    file_1='/disk2/temp/temp.p';
-    file_2='/disk2/temp/temp_1.p';
-    scores_1=pickle.load(open(file_1,'rb'));
-    scores_2=pickle.load(open(file_2,'rb'));
-    
-    print scores_1.keys(),scores_2.keys();
-    assert scores_1.keys()==scores_2.keys();
-
-    for k in scores_1.keys():
-
-        tube_scores_1=scores_1[k];
-        tube_scores_2=scores_2[k];
-        print k,tube_scores_1.shape,tube_scores_2.shape
-        assert np.array_equal(tube_scores_1,tube_scores_2);
-
-    return
-
-    path_to_db='sqlite://///disk2/novemberExperiments/experiments_youtube/patches_nn_hash.db';
-    path_to_hash='/disk2/decemberExperiments/hash_tables';
-    total_class_counts={0: 622034, 1: 245763, 2: 664689, 3: 125286, 4: 311316, 5: 500093, 6: 889816, 7: 839481, 8: 358913, 9: 1813897}
-    class_idx = 0;
-    video_id = 1;
-    shot_id = 1;
-    out_file_scores='/disk2/temp/temp_npz';
-    num_hash_tables = 32;
-
-    params_dict = {};
-    params_dict['total_class_counts'] = total_class_counts;
-    params_dict['path_to_db'] = path_to_db
-    params_dict['class_idx'] =  class_idx
-    params_dict['video_id'] =  video_id
-    params_dict['shot_id'] =  shot_id
-    params_dict['out_file_scores'] =  out_file_scores
-    params_dict['path_to_hash'] = path_to_hash
-    params_dict['num_hash_tables'] = num_hash_tables
-    params=createParams('saveNpzScorePerShot');
-    params=params(**params_dict);
-    script_saveNpzScorePerShot(params);
-
-
-    return
-
-    class_labels_map=[('boat', 2), ('train', 9), ('dog', 6), ('cow', 5), ('aeroplane', 0), ('motorbike', 8), ('horse', 7), ('bird', 1), ('car', 3), ('cat', 4)]
-    class_idx_all=[tuple_curr[1] for tuple_curr in class_labels_map];
-    # total_counts=getTotalCountsPerClass(path_to_db,class_idx_all)
-    total_counts={0: 622034, 1: 245763, 2: 664689, 3: 125286, 4: 311316, 5: 500093, 6: 889816, 7: 839481, 8: 358913, 9: 1813897}
-    params_path='/disk2/decemberExperiments/analyzing_scores/scores_of_samples_11.html_meta_experiment.p';
-    params_dict=pickle.load(open(params_path,'rb'));
-    out_file_pre=params_dict['out_file_frames'];
-    out_file_pre=out_file_pre[:out_file_pre.rindex('.')]+'_frameCountNormalized';
-    params_dict['out_file_frames'] = out_file_pre+'.p';
-    params_dict['out_file_html'] = out_file_pre+'.html';
-    params_dict['n_jobs']=12;
-    params_dict['frameCountNorm']=True
-
-    params=createParams('scoreRandomFrames');
-    params=params(**params_dict);
-
-    script_scoreRandomFrames(params)
-    pickle.dump(params._asdict(),open(params.out_file_html+'_meta_experiment.p','wb'));
     
 
 if __name__=='__main__':

@@ -1,3 +1,213 @@
+FOR script_scoreRandomFrames experiments_hashScoring
+    class_labels_map=[('boat', 2), ('train', 9), ('dog', 6), ('cow', 5), ('aeroplane', 0), ('motorbike', 8), ('horse', 7), ('bird', 1), ('car', 3), ('cat', 4)]
+    class_idx_all=[tuple_curr[1] for tuple_curr in class_labels_map];
+    # total_counts=getTotalCountsPerClass(path_to_db,class_idx_all)
+    total_counts={0: 622034, 1: 245763, 2: 664689, 3: 125286, 4: 311316, 5: 500093, 6: 889816, 7: 839481, 8: 358913, 9: 1813897}
+    params_path='/disk2/decemberExperiments/analyzing_scores/scores_of_samples_11.html_meta_experiment.p';
+    params_dict=pickle.load(open(params_path,'rb'));
+    out_file_pre=params_dict['out_file_frames'];
+    out_file_pre=out_file_pre[:out_file_pre.rindex('.')]+'_frameCountNormalized';
+    params_dict['out_file_frames'] = out_file_pre+'.p';
+    params_dict['out_file_html'] = out_file_pre+'.html';
+    params_dict['n_jobs']=12;
+    params_dict['frameCountNorm']=True
+
+    params=createParams('scoreRandomFrames');
+    params=params(**params_dict);
+
+    script_scoreRandomFrames(params)
+    pickle.dump(params._asdict(),open(params.out_file_html+'_meta_experiment.p','wb'));
+
+FOR script_saveNpzScorePerShot experiments_hashScoring
+    out_dir='/disk2/decemberExperiments/shot_scores';
+    if not os.path.exists(out_dir):
+        os.mkdir(out_dir);
+
+
+    path_to_db='sqlite://///disk2/novemberExperiments/experiments_youtube/patches_nn_hash.db';
+    mani=TubeHash_Manipulator(path_to_db);
+    mani.openSession();
+    vals = mani.select((Tube.class_idx_pascal,Tube.video_id,Tube.shot_id),distinct=True);
+    # deep_features_path = mani.select((Tube.deep_features_path,),distinct= True);
+    mani.closeSession();
+
+    params_dict = {};
+    params_dict['total_class_counts'] = {0: 622034, 1: 245763, 2: 664689, 3: 125286, 4: 311316, 5: 500093, 6: 889816, 7: 839481, 8: 358913, 9: 1813897};
+    params_dict['path_to_db'] = 'sqlite://///disk2/novemberExperiments/experiments_youtube/patches_nn_hash.db'
+    params_dict['path_to_hash'] = '/disk2/decemberExperiments/hash_tables'
+    params_dict['num_hash_tables'] = 32
+
+    # params_obj=createParams('saveNpzScorePerShot');
+    params_all=[];
+    for idx_val,val in enumerate(vals):
+        params_dict['class_idx'] =  val[0];
+        params_dict['video_id'] =  val[1];
+        params_dict['shot_id'] =  val[2]
+        params_dict['out_file_scores'] =  os.path.join(out_dir,'_'.join(map(str,val))+'.p')
+        params_dict['idx']=idx_val
+        # params=params_obj(**params_dict);
+        # params_all.append(params);
+        params_all.append(copy.deepcopy(params_dict))
+
+    print len(params_all);
+    p = multiprocessing.Pool(multiprocessing.cpu_count())
+    p.map(script_saveNpzScorePerShot,params_all)
+
+
+
+FOR script_fixHorseCountError experiments_hashScoring
+    score_dir='/disk2/decemberExperiments/shot_scores';
+    out_dir='/disk2/decemberExperiments/shot_scores_analysis';
+    path_to_patches='/disk2/res11/tubePatches';
+    class_labels_map = [('boat', 2), ('train', 9), ('dog', 6), ('cow', 5), ('aeroplane', 0), ('motorbike', 8), ('horse', 7), ('bird', 1), ('car', 3), ('cat', 4)]
+    [class_labels,class_idx_all]=zip(*class_labels_map);
+    
+
+
+    selected_class=7
+    class_label=class_labels[class_idx_all.index(selected_class)]
+    out_file=os.path.join(out_dir,'all_scores_patches_'+class_label+'.p')
+    print out_file
+    score_files=[os.path.join(score_dir,file_curr) for file_curr in os.listdir(score_dir) if file_curr.endswith('.p') and file_curr.startswith(str(selected_class)+'_')];
+    out_file='/disk2/temp/horse_debug.p'
+    saveRecordOfCountErrorFiles(score_files,class_label,path_to_patches,out_file)
+    script_fixHorseCountError(out_file)
+
+FOR getListScoresAndPatches experiments_hashScoring
+
+    path_to_db='sqlite://///disk2/novemberExperiments/experiments_youtube/patches_nn_hash.db';
+    score_dir='/disk2/decemberExperiments/shot_scores';
+    out_dir='/disk2/decemberExperiments/shot_scores_analysis';
+    path_to_patches='/disk2/res11/tubePatches';
+    class_labels_map = [('boat', 2), ('train', 9), ('dog', 6), ('cow', 5), ('aeroplane', 0), ('motorbike', 8), ('horse', 7), ('bird', 1), ('car', 3), ('cat', 4)]
+    [class_labels,class_idx_all]=zip(*class_labels_map);
+    for selected_class in [3]:
+        class_label=class_labels[class_idx_all.index(selected_class)]
+        out_file=os.path.join(out_dir,'all_scores_patches_'+class_label+'.p')
+        print out_file
+        score_files=[os.path.join(score_dir,file_curr) for file_curr in os.listdir(score_dir) if file_curr.endswith('.p') and file_curr.startswith(str(selected_class)+'_')];
+        list_scores,list_files=getListScoresAndPatches(score_files,class_label,path_to_patches)
+        pickle.dump([list_scores,list_files],open(out_file,'wb'));
+
+FOR visualizeRankedPatchesPerClass experiments_hashScoring
+
+    out_dir='/disk2/decemberExperiments/shot_scores_analysis';
+    class_labels_map = [('boat', 2), ('train', 9), ('dog', 6), ('cow', 5), ('aeroplane', 0), ('motorbike', 8), ('horse', 7), ('bird', 1), ('car', 3), ('cat', 4)]
+    [class_labels,class_idx_all]=zip(*class_labels_map);
+    
+    num_to_display=100;
+    out_file_html=os.path.join(out_dir,'all_scores_patches_sorted_'+str(num_to_display))+'.html';
+    rel_path=['/disk2','../../..'];
+    height_width=[400,400];
+    
+    class_score_info=[];
+    for class_label,class_idx in class_labels_map:
+        out_file=os.path.join(out_dir,'all_scores_patches_'+class_label+'.p')
+        tuple_curr=(class_idx,class_label,out_file)
+        print tuple_curr
+        class_score_info.append(tuple_curr);
+    
+    visualizeRankedPatchesPerClass(class_score_info,num_to_display,out_file_html,rel_path,height_width)
+
+FOR visualizeBestTubeRank experiments_hashScoring
+    params_dict={};
+    params_dict['class_labels_map'] = [('boat', 2), ('train', 9), ('dog', 6), ('cow', 5), ('aeroplane', 0), ('motorbike', 8), ('horse', 7), ('bird', 1), ('car', 3), ('cat', 4)]
+    params_dict['rel_path'] = ['/disk2','../../..']
+    params_dict['out_file_html'] = '/disk2/decemberExperiments/shot_scores_analysis/best_tube_hists.html';
+    params_dict['out_dir'] = '/disk2/decemberExperiments/shot_scores_analysis';    
+    params_dict['score_info_file'] = os.path.join(params_dict['out_dir'],'shot_scores_info.p');
+    params=createParams('visualizeBestTubeRank');
+    params=params(**params_dict);
+    visualizeBestTubeRank(params);
+    pickle.dump(params._asdict(),open(params.out_file_html+'_meta_experiment.p','wb'));
+
+FOR script_testNpzScoreAccuracy experiments_hashScoring 
+    path_to_db='sqlite://///disk2/novemberExperiments/experiments_youtube/patches_nn_hash.db';
+    path_to_hash='/disk2/decemberExperiments/hash_tables';
+    total_class_counts={0: 622034, 1: 245763, 2: 664689, 3: 125286, 4: 311316, 5: 500093, 6: 889816, 7: 839481, 8: 358913, 9: 1813897}
+    class_idx = 0;
+    video_id = 1;
+    shot_id = 1;
+    num_hash_tables=32;
+    num_hash_vals=256;
+    tube_id=0;
+    deep_features_idx=0;
+    tube_file='/disk2/temp/temp.p';
+
+    params_dict={};
+    params_dict['path_to_db'] = path_to_db
+    params_dict['path_to_hash'] = path_to_hash
+    params_dict['total_class_counts'] = total_class_counts
+    params_dict['class_idx'] = class_idx 
+    params_dict['video_id'] = video_id 
+    params_dict['shot_id'] = shot_id 
+    params_dict['num_hash_tables'] = num_hash_tables
+    params_dict['num_hash_vals'] = num_hash_vals
+    params_dict['tube_id'] = tube_id
+    params_dict['deep_features_idx'] = deep_features_idx
+    params_dict['tube_file']=tube_file;
+    params=createParams('testNpzScoreAccuracy');
+    params=params(**params_dict);
+    script_testNpzScoreAccuracy(params)
+
+FOR script_saveCounts experiments_hashScoring
+    path_to_hash='/disk2/decemberExperiments/hash_tables';
+    num_hash_tables=32;
+    num_hash_vals=256;
+    n_jobs=12;
+    script_saveCounts(path_to_hash,num_hash_tables,num_hash_vals,n_jobs)
+
+FOR script_scoreRandomFrames experiments_hashScoring    
+    path_to_db='sqlite://///disk2/novemberExperiments/experiments_youtube/patches_nn_hash.db';
+    class_labels_map=[('boat', 2), ('train', 9), ('dog', 6), ('cow', 5), ('aeroplane', 0), ('motorbike', 8), ('horse', 7), ('bird', 1), ('car', 3), ('cat', 4)]
+    npz_path='/disk2/decemberExperiments/hash_tables';
+    numberOfFrames=10;
+    max_idx=6371288;
+    [class_labels,class_idx]=zip(*class_labels_map)
+    n_jobs=32;
+    table_idx_all=random.sample(xrange(max_idx), numberOfFrames)
+    
+    out_dir='/disk2/decemberExperiments/analyzing_scores';
+    if not os.path.exists(out_dir):
+        os.mkdir(out_dir);
+    out_file_html=os.path.join(out_dir,'scores_of_samples_'+str(numberOfFrames)+'.html');
+    rel_path=['/disk2','../../..']
+    width_height=[300,300];
+
+    out_file_frames=os.path.join(out_dir,'scores_of_samples_'+str(numberOfFrames)+'.p');
+    params_dict={};
+    params_dict['path_to_db'] = path_to_db;
+    params_dict['class_labels_map'] = class_labels_map;
+    params_dict['npz_path'] = npz_path;
+    params_dict['numberOfFrames'] = numberOfFrames;
+    params_dict['max_idx'] = max_idx;
+    params_dict['n_jobs'] = n_jobs;
+    params_dict['table_idx_all'] = table_idx_all;
+    params_dict['out_file_html'] = out_file_html;
+    params_dict['rel_path'] = rel_path;
+    params_dict['width_height'] = width_height;
+    params_dict['out_file_frames'] = out_file_frames;
+    params=createParams('scoreRandomFrames');
+    params=params(**params_dict);
+    script_scoreRandomFrames(params);
+    pickle.dump(params._asdict(),open(params.out_file_html+'_meta_experiment.p','wb'));
+
+
+FOR script_visualizeNNComparisonWithHash experiments_hashing    
+    params_dict={};
+    params_dict['in_file']='/disk2/decemberExperiments/toyExample/tubes_nn_32.p'
+    params_dict['in_file_hash']='/disk2/decemberExperiments/toyExample/tubes_nn_32_8_32.p'
+    params_dict['out_file_html']=params_dict['in_file_hash'][:-2]+'_qualitative_comparsion.html';
+    params_dict['rel_path']=['/disk2','../../..'];
+    params_dict['topn']=10;
+    params_dict['img_size']=[200,200];
+    params=createParams('visualizeNNComparisonWithHash');
+    params=params(**params_dict);
+    script_visualizeNNComparisonWithHash(params);
+    pickle.dump(params._asdict(),open(params.out_file_html+'_meta_experiment.p','wb'));
+    
+
+
 FOR script_saveBigFeatureMats experiments_hashing
 
     out_dir='/disk2/decemberExperiments/gettingNN';

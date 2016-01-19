@@ -64,6 +64,17 @@ def createParams(type_Experiment):
                     'out_dir',
                     'score_info_file'];
         params = namedtuple('Params_visualizeBestTubeRank',list_params);
+    elif type_Experiment =='verifyRecordedScoreMatchesDBScore':
+        list_params=['path_to_db',
+                    'path_to_hash',
+                    'total_class_counts',
+                    'img_path',
+                    'class_label',
+                    'video_id',
+                    'shot_id',
+                    'class_idx',
+                    'score_file']
+        params = namedtuple('Params_verifyRecordedScoreMatchesDBScore',list_params);
     else:
         params=None;
 
@@ -420,6 +431,11 @@ def script_saveNpzScorePerShot(params):
     out_file_scores =  params['out_file_scores']
     path_to_hash = params['path_to_hash']
     num_hash_tables = params['num_hash_tables']
+    
+    class_idx_assume = params.get('class_idx_assume',None);
+    if class_idx_assume is None:
+        class_idx_assume=class_idx;
+
     print params['idx']
 
     # print 'getting vals and frame count from db',
@@ -441,12 +457,22 @@ def script_saveNpzScorePerShot(params):
 
     # print 'getting hash_bin_scores',
     # t=time.time();
-    total_class_count=total_class_counts[class_idx]-total_frames;
+    if class_idx_assume ==class_idx:
+        total_class_count=total_class_counts[class_idx_assume]-total_frames;
+    else:
+        total_class_count=total_class_counts[class_idx_assume];
+
     hash_bin_scores={};
+    
     for idx,k in enumerate(hash_counts.keys()):
         in_file=str(k[0])+'_'+str(k[1])+'_counts.p'
         class_id_counts=pickle.load(open(os.path.join(path_to_hash,in_file),'rb'));
-        hash_bin_count=class_id_counts[class_idx]-hash_counts[k];
+        
+        if class_idx_assume ==class_idx:
+            hash_bin_count=class_id_counts.get(class_idx_assume,0)-hash_counts[k];
+        else:
+            hash_bin_count=class_id_counts.get(class_idx_assume,0)
+
         hash_bin_scores[k]=hash_bin_count/float(total_class_count);
     # print time.time()-t;
 
@@ -550,6 +576,20 @@ def saveAverageScoresInfo(score_files,out_file):
 
     pickle.dump([score_files,score_files_info],open(out_file,'wb'));
 
+def getNRankedPatches(list_scores,list_files,num_to_display):
+    # print len(list_scores),len(list_files);
+    
+    assert len(list_scores)==len(list_files)
+    num_patches=len(list_files);
+    list_scores=np.array(list_scores);
+    sort_idx=np.argsort(list_scores)[::-1];
+    list_scores_sorted=list_scores[sort_idx]
+    list_files=np.array(list_files);
+    list_files_sorted=list_files[sort_idx];
+    idx_display=np.linspace(0,num_patches-1,num_to_display,dtype=int);
+    img_paths=list(list_files_sorted[idx_display]);
+    scores_picked=list_scores_sorted[idx_display];
+    return img_paths,scores_picked,idx_display
 
 
 def visualizeRankedPatchesPerClass(class_score_info,num_to_display,out_file_html,rel_path,height_width):
@@ -560,27 +600,8 @@ def visualizeRankedPatchesPerClass(class_score_info,num_to_display,out_file_html
     for selected_class,class_label,out_file in class_score_info:
         [list_scores,list_files] = pickle.load(open(out_file,'rb'));
         num_patches=len(list_files);
-        print len(list_scores),len(list_files);
-        
-        if len(list_scores)!=len(list_files):
-            print 'continuing'
-            continue;
-        
-        list_scores=np.array(list_scores);
-        sort_idx=np.argsort(list_scores)[::-1];
-
-        list_scores_sorted=list_scores[sort_idx]
-
-        list_files=np.array(list_files);
-        list_files_sorted=list_files[sort_idx];
-        
-        idx_display=np.linspace(0,num_patches-1,num_to_display,dtype=int);
-
-        img_paths=list(list_files_sorted[idx_display]);
+        img_paths,scores_picked,idx_display=getNRankedPatches(list_scores,list_files,num_to_display)
         img_paths=[img_path.replace(rel_path[0],rel_path[1]) for img_path in img_paths];
-        
-        scores_picked=list_scores_sorted[idx_display];
-
         captions=[];
         for idx_idx_curr,idx_curr in enumerate(idx_display):
             score_curr=round(scores_picked[idx_idx_curr],5)
@@ -596,7 +617,6 @@ def visualizeRankedPatchesPerClass(class_score_info,num_to_display,out_file_html
     captions_all=np.array(captions_all).T
     visualize.writeHTML(out_file_html,img_paths_all,captions_all,height_width[0],height_width[0]);
     print out_file_html
-
 
 def getListScoresAndPatches(score_files,class_label,path_to_patches):
     print len(score_files);
@@ -685,41 +705,342 @@ def saveRecordOfCountErrorFiles(score_files,class_label,path_to_patches,out_file
     print len(record)
     pickle.dump(record,open(out_file,'wb'));
 
-def main():
-    # print score_files_info
-        # mani=Tube_Manipulator(path_to_db);
-        # mani.openSession();
-        
-        # criterion=(Tube.class_idx_pascal==class_idx,Tube.video_id==video_id,Tube.shot_id==shot_id,Tube.tube_id==best_tube,Tube.deep_features_idx==best_tube_best_frame_idx);
-        # toSelect=(Tube.img_path,)
-        # [(best_tube_best_frame_path,)]=mani.select(toSelect,criterion);
-        # print best_tube_best_frame_path
+def getPatchInfoFromPath(path):
+    path_broken=path.split('/');
+    video_broken=path_broken[-3].split('_');
+    class_label=video_broken[0];
+    video_id=int(video_broken[1]);
+    shot_id=int(video_broken[2]);
+    tube_id=int(path_broken[-2]);
+    frame_id=path_broken[-1]
+    frame_id=int(frame_id[:frame_id.rindex('.')]);
+    return class_label,video_id,shot_id,tube_id,frame_id
 
-        # criterion=(Tube.class_idx_pascal==class_idx,Tube.video_id==video_id,Tube.shot_id==shot_id,Tube.tube_id==worst_frame_tube,Tube.deep_features_idx==worst_frame_idx);
-        # toSelect=(Tube.img_path,)
-        # [(worst_frame_path,)]=mani.select(toSelect,criterion);
-        # print worst_frame_path
-        # criterion=(Tube.class_idx_pascal==class_idx,Tube.video_id==video_id,Tube.shot_id==shot_id,Tube.tube_id==best_frame_tube,Tube.deep_features_idx==best_frame_idx);
-        # toSelect=(Tube.img_path,)
-        # [(best_frame_path,)]=mani.select(toSelect,criterion);
-        # print best_frame_path
-        # mani.closeSession()    
-
-    # vals=np.array(vals);
-    # img_paths=vals[:,0];
-    # vals=np.array(vals[:,1:],dtype=int);
-
-    # best_tube_best_frame_path=img_paths[np.logical_and(vals[:,0]==best_tube,vals[:,1]==best_tube_best_frame_idx)];
-    # best_frame_path=img_paths[np.logical_and(vals[:,0]==best_frame_tube,vals[:,1]==best_frame_idx)];
-    # worst_frame_path=img_paths[np.logical_and(vals[:,0]==worst_frame_tube,vals[:,1]==worst_frame_idx)];
-
-    # print 'best_tube_best_frame_path',best_tube_best_frame_path
-    # print best_tube_best_frame_path.replace('/disk2','http://vision3.cs.ucdavis.edu:1000/');
-    # print 'best_frame_path',best_frame_path
-    # print best_frame_path.replace('/disk2','http://vision3.cs.ucdavis.edu:1000/');
-    # print 'worst_frame_path',worst_frame_path
-    # print worst_frame_path.replace('/disk2','http://vision3.cs.ucdavis.edu:1000/');
+def script_verifyRecordedScoreMatchesDBScore(params):
     
+    path_to_db = params.path_to_db
+    path_to_hash = params.path_to_hash
+    total_class_counts = params.total_class_counts
+    img_path = params.img_path
+    class_label = params.class_label
+    video_id = params.video_id
+    shot_id = params.shot_id
+    class_idx = params.class_idx
+    score_file = params.score_file
+    
+    mani=Tube_Manipulator(path_to_db);
+    mani.openSession();
+    
+    toSelect=(Tube.idx,);
+    criterion=(Tube.class_idx_pascal==class_idx,Tube.video_id==video_id,Tube.shot_id==shot_id);
+    total_shot_patches=mani.count(toSelect,criterion);
+    
+    #get patch id
+    hash_info_patch=getHashInfoForImg(path_to_db,img_path);
+    # patch_id=mani.select((Tube.idx,),(Tube.img_path==img_path,));
+    # assert len(patch_id)==1;
+    # patch_id=patch_id[0][0];
+    
+    # #get hash vals
+    # mani_hash=TubeHash_Manipulator(path_to_db);
+    # mani_hash.openSession();
+    # toSelect=(TubeHash.hash_table,TubeHash.hash_val)
+    # criterion=(TubeHash.idx==patch_id,);
+    # hash_info_patch=mani_hash.select(toSelect,criterion);
+    
+    #get hash_info of all patches in shot
+    criterion=(Tube.class_idx_pascal==class_idx,Tube.video_id==video_id,Tube.shot_id==shot_id)
+    hash_info_all=mani_hash.selectMix(toSelect,criterion);
+    
+    mani_hash.closeSession();
+    mani.closeSession()
+
+    hash_info_all=list(hash_info_all);
+    hash_scores_patch=[];
+    for idx_hash_info,hash_info_curr in enumerate(hash_info_patch):
+
+        hash_file_curr=str(hash_info_curr[0])+'_'+str(hash_info_curr[1])+'_counts.p';
+        hash_file_curr=os.path.join(path_to_hash,hash_file_curr);
+        hash_bin_class_counts=pickle.load(open(hash_file_curr,'rb'));
+        hash_bin_class_count=hash_bin_class_counts[class_idx];
+
+        numo=hash_bin_class_count-hash_info_all.count(hash_info_curr);
+        deno=total_class_counts[class_idx]-total_shot_patches;
+        hash_scores_patch.append(numo/float(deno));
+
+    score_db=np.mean(hash_scores_patch);
+    print len(hash_scores_patch),score_db,score_file
+    assert np.isclose(score_db,score_file);
+
+def saveTotalClassBreakdowns(path_to_db,out_file):
+    mani=Tube_Manipulator(path_to_db);
+    mani.openSession();
+    toSelect=(Tube.class_idx_pascal,Tube.video_id,Tube.shot_id,Tube.tube_id);
+    vals=mani.select(toSelect,distinct=True);
+    mani.closeSession();
+    vals=np.array(vals);
+    class_idx_db=vals[:,0];
+    ids_db=vals[:,1:];
+
+    column_names=['video','shot','tube'];
+    counts=getClassCountsByIdType(class_idx_db,ids_db,column_names)
+    pickle.dump(counts,open(out_file,'wb'));
+
+def getClassCountsByIdType(class_idx_db,ids_db,column_names):
+    counts={};
+    class_idx_all=np.unique(class_idx_db);
+    for column_idx,column_name in enumerate(column_names):
+        counts[column_name]={};
+        for class_idx in class_idx_all:
+            rel_rows=class_idx_db==class_idx
+            rel_cols=ids_db[rel_rows,:column_idx+1];
+            unique_rows=np.vstack({tuple(row) for row in rel_cols})
+            counts[column_name][class_idx]=unique_rows.shape[0];
+    return counts
+
+def getHashBinClassBreakdowns((hash_table,hash_val,path_to_db,out_file,idx)):
+    print idx
+    mani=Tube_Manipulator(path_to_db)
+    mani.openSession();
+    toSelect=(Tube.class_idx_pascal,Tube.video_id,Tube.shot_id,Tube.tube_id);
+    criterion=(TubeHash.hash_table==hash_table,TubeHash.hash_val==hash_val);
+    vals=mani.selectMix(toSelect,criterion=criterion,distinct=True);
+    mani.closeSession();
+    vals=np.array(vals);
+    class_idx_db=vals[:,0];
+    ids_db=vals[:,1:];
+
+    column_names=['video','shot','tube'];
+    counts=getClassCountsByIdType(class_idx_db,ids_db,column_names)
+    # for k in counts.keys():
+    #     for k2 in counts[k].keys():
+    #         print k,k2,counts[k][k2];
+
+    # return counts
+    pickle.dump(counts,open(out_file,'wb'));
+
+def verifyTotalClassBreakdowns(path_to_db,out_file):
+    counts=pickle.load(open(out_file,'rb'));
+    mani=Tube_Manipulator(path_to_db);
+    mani.openSession();
+    for class_idx in range(10):
+        print class_idx
+
+        toSelect=(Tube.video_id,);
+        criterion=(Tube.class_idx_pascal==class_idx,);
+        count_video=mani.count(toSelect,criterion,distinct=True);
+        toSelect=(Tube.video_id,Tube.shot_id);
+        count_shot=mani.count(toSelect,criterion,distinct=True);
+        toSelect=(Tube.video_id,Tube.shot_id,Tube.tube_id);
+        count_tube=mani.count(toSelect,criterion,distinct=True);
+
+        print counts['video'][class_idx],count_video,
+        print counts['shot'][class_idx],count_shot,
+        print counts['tube'][class_idx],count_tube
+
+        assert counts['video'][class_idx]==count_video
+        assert counts['shot'][class_idx]==count_shot
+        assert counts['tube'][class_idx]==count_tube
+
+    mani.closeSession();
+
+def getAllClassesShotScoresByImgPath():
+
+    path_to_db = 'sqlite://///disk2/novemberExperiments/experiments_youtube/patches_nn_hash.db';
+    out_dir='/disk2/januaryExperiments/class_breakdowns';
+    num_hash_tables=32;
+    total_counts_file=os.path.join(out_dir,'total_counts_breakdown.p');
+    class_labels_map=[('boat', 2), ('train', 9), ('dog', 6), ('cow', 5), ('aeroplane', 0), ('motorbike', 8), ('horse', 7), ('bird', 1), ('car', 3), ('cat', 4)];
+    # [class_labels,class_idx_all]=zip(*class_labels_map);
+
+    # print 'best_dog'
+    # img_path='/disk2/res11/tubePatches/dog_21_19/6/63.jpg'
+    print 'not_best_dog'
+    img_path='/disk2/res11/tubePatches/dog_35_1/0/33.jpg';
+    class_idx=6;
+    type_count='shot';
+
+    total_counts=pickle.load(open(total_counts_file,'rb'));
+
+    vals=getHashInfoForImg(path_to_db,img_path);
+    # mani=Tube_Manipulator(path_to_db);
+    # mani.openSession();
+    # [(db_idx,)]=mani.select((Tube.idx,),(Tube.img_path==img_path,));
+    # mani.closeSession();
+    # mani=TubeHash_Manipulator(path_to_db);
+    # mani.openSession();
+    # vals=mani.select((TubeHash.hash_table,TubeHash.hash_val),(TubeHash.idx==db_idx,));
+    # mani.closeSession();
+
+    scores={};
+
+    for class_label,class_idx_assume in class_labels_map:
+        totals_in_bins=[]
+        for hash_table,hash_val in vals:
+            file_curr=str(hash_table)+'_'+str(hash_val)+'_counts.p';
+            file_curr=os.path.join(out_dir,file_curr);
+            counts=pickle.load(open(file_curr,'rb'));
+            if class_idx_assume==class_idx:
+                counts_numo=counts[type_count][class_idx_assume]-1;
+                counts_deno=total_counts[type_count][class_idx_assume]-1;
+            else:
+                counts_numo=counts[type_count][class_idx_assume];
+                counts_deno=total_counts[type_count][class_idx_assume];
+            score_curr=counts_numo/float(counts_deno);
+            if class_idx_assume not in scores:
+                scores[class_idx_assume]=[];    
+            scores[class_idx_assume].append(score_curr);
+            totals_in_bins.append(sum(counts[type_count].values()));
+            
+    print len(totals_in_bins),sum(totals_in_bins),np.mean(totals_in_bins);
+    for class_label,class_idx_assume in class_labels_map:
+        print class_label,class_idx_assume,len(scores[class_idx_assume]),np.mean(scores[class_idx_assume])
+
+def saveHashBinFrameCountsAll(out_file,hash_dir,class_idx_all,num_hash_tables,num_hash_vals):
+    hash_counts_all=np.zeros(shape=(num_hash_tables*num_hash_vals,len(class_idx_all)),dtype=int);
+    hash_counts_all_keys=[];
+    print hash_counts_all.shape
+
+    for hash_table in range(num_hash_tables):
+        for hash_val in range(num_hash_vals):
+            hash_counts_all_keys.append((hash_table,hash_val));
+            idx_curr=(hash_table*num_hash_vals)+hash_val
+            # print idx_curr
+            file_curr=str(hash_table)+'_'+str(hash_val)+'_counts.p';
+            file_curr=os.path.join(hash_dir,file_curr);
+            counts=pickle.load(open(file_curr,'rb'));
+            for key_curr in counts:
+                hash_counts_all[idx_curr,key_curr]=counts[key_curr];
+
+    pickle.dump([hash_counts_all_keys,hash_counts_all],open(out_file,'wb'));
+
+def getHashInfoForImg(path_to_db,img_path):
+    mani=Tube_Manipulator(path_to_db);
+    mani.openSession();
+    
+    #get patch id
+    patch_id=mani.select((Tube.idx,),(Tube.img_path==img_path,));
+    assert len(patch_id)==1;
+    patch_id=patch_id[0][0];
+    mani.closeSession();
+
+    #get hash vals
+    mani_hash=TubeHash_Manipulator(path_to_db);
+    mani_hash.openSession();
+    toSelect=(TubeHash.hash_table,TubeHash.hash_val)
+    criterion=(TubeHash.idx==patch_id,);
+    hash_info_patch=mani_hash.select(toSelect,criterion);
+    mani_hash.closeSession();
+    return hash_info_patch
+    
+
+def script_saveNpzScorePerShot_normalized(params):
+    path_to_db = params['path_to_db']
+    file_binCounts = params['file_binCounts']
+    class_idx =  params['class_idx']
+    video_id =  params['video_id']
+    shot_id =  params['shot_id']
+    out_file_scores =  params['out_file_scores']
+    num_hash_tables = params['num_hash_tables']
+    
+    class_idx_assume = params.get('class_idx_assume',None);
+    if class_idx_assume is None:
+        class_idx_assume=class_idx;
+
+    print params['idx']
+
+    mani=Tube_Manipulator(path_to_db);
+
+    mani.openSession();
+    toSelect=(Tube.tube_id,Tube.deep_features_idx,TubeHash.hash_table,TubeHash.hash_val);
+    criterion=(Tube.video_id==video_id,Tube.class_idx_pascal==class_idx,Tube.shot_id==shot_id);
+    vals=mani.selectMix(toSelect,criterion);
+    total_frames = getShotFrameCount(mani,class_idx,video_id,shot_id);
+    mani.closeSession();
+
+    hash_count_keys,hash_counts=pickle.load(open(file_binCounts,'rb'));
+    total_counts=np.sum(hash_counts,axis=0);
+
+    scores_all={};
+    vals=np.array(vals)
+    tube_ids_uni=np.unique(vals[:,0]);
+
+    for tube_id in tube_ids_uni:
+        vals_rel=vals[vals[:,0]==tube_id,1:];
+        deep_features_idx_uni = np.unique(vals_rel[:,0]);
+        scores_tube=np.empty((len(deep_features_idx_uni),num_hash_tables));
+        scores_tube[:]=np.nan;
+
+        for deep_features_idx in deep_features_idx_uni:
+            hash_info=vals_rel[vals_rel[:,0]==deep_features_idx,1:];
+            
+            assert len(hash_info)==num_hash_tables
+
+            scores=[];
+            
+            for hash_info_curr in hash_info:
+                idx_curr=hash_count_keys.index(tuple(hash_info_curr));
+                counts_curr=hash_counts[idx_curr,:];
+                deno=counts_curr/total_counts.astype(dtype=float);
+                numo=deno[class_idx_assume];
+                deno=sum(deno);
+                score_curr=numo/float(deno);
+                scores.append(score_curr);
+            
+            scores_tube[deep_features_idx,:]=scores;
+
+        scores_all[tube_id]=scores_tube;
+
+    for tube_id in scores_all:
+        tube_scores=scores_all[tube_id];
+        assert np.sum(np.isnan(tube_scores))==0;
+
+    pickle.dump(scores_all,open(out_file_scores,'wb'));
+
+def meta_script_saveNpzScorePerShot_normalized(params,out_dir_scores):
+
+    mani=TubeHash_Manipulator(params['path_to_db']);
+    mani.openSession();
+    vals=mani.select((Tube.class_idx_pascal,Tube.video_id,Tube.shot_id),distinct=True);
+    mani.closeSession()
+
+    print len(vals)
+
+    args=[];
+    for idx,(class_idx,video_id,shot_id) in enumerate(vals):
+        params_curr = copy.deepcopy(params);
+        params_curr['class_idx'] = class_idx
+        params_curr['video_id'] = video_id
+        params_curr['shot_id'] = shot_id
+        file_curr = str(params_curr['class_idx'])+'_'+str(params_curr['video_id'])+'_'+str(params_curr['shot_id'])+'.p';
+        params_curr['out_file_scores'] = os.path.join(out_dir_scores,file_curr)
+        params_curr['idx'] = idx;
+
+        if os.path.exists(params_curr['out_file_scores']):
+            continue;
+        else:
+            args.append(params_curr);    
+
+    print len(args)
+
+    n_jobs=12
+    p = multiprocessing.Pool(min(multiprocessing.cpu_count(),n_jobs))
+    p.map(script_saveNpzScorePerShot_normalized,args);
+
+def main(): 
+    params={};
+    params['path_to_db'] = 'sqlite://///disk2/novemberExperiments/experiments_youtube/patches_nn_hash.db';
+    params['file_binCounts'] = '/disk2/januaryExperiments/frameCounts/frameCounts_all.p';
+    params['num_hash_tables'] = 32
+    
+    out_dir_scores='/disk2/januaryExperiments/shot_score_normalized/';
+    if not os.path.exists(out_dir_scores):
+        os.mkdir(out_dir_scores);
+
+    
+
+
+        
 
 if __name__=='__main__':
     main();

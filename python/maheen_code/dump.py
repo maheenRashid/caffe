@@ -1,3 +1,65 @@
+FOR meta_script_saveNpzScorePerShot_normalized experiments_hashScoring
+    params={};
+    params['path_to_db'] = 'sqlite://///disk2/novemberExperiments/experiments_youtube/patches_nn_hash.db';
+    params['file_binCounts'] = '/disk2/januaryExperiments/frameCounts/frameCounts_all.p';
+    params['num_hash_tables'] = 32
+    
+    out_dir_scores='/disk2/januaryExperiments/shot_score_normalized/';
+    if not os.path.exists(out_dir_scores):
+        os.mkdir(out_dir_scores);
+        
+    meta_script_saveNpzScorePerShot_normalized(params,out_dir_scores)
+
+FOR saveHashBinFrameCountsAll experiments_hashScoring
+    out_dir='/disk2/januaryExperiments/frameCounts';
+    out_file=os.path.join(out_dir,'frameCounts_all.p');
+    
+    hash_dir='/disk2/decemberExperiments/hash_tables';
+    class_idx_all=range(10);
+    print class_idx_all;
+    num_hash_tables=32
+    num_hash_vals=256
+    saveHashBinFrameCountsAll(out_file,hash_dir,class_idx_all,num_hash_tables,num_hash_vals)
+
+
+FOR script_verifyRecordedScoreMatchesDBScore experiments_hashScoring
+    path_to_db = 'sqlite://///disk2/novemberExperiments/experiments_youtube/patches_nn_hash.db';
+    path_to_hash = '/disk2/decemberExperiments/hash_tables'
+    path_to_scores ='/disk2/decemberExperiments/shot_scores';
+    all_scores_pre = '/disk2/decemberExperiments/shot_scores_analysis/all_scores_patches_';
+    class_labels_map=[('boat', 2), ('train', 9), ('dog', 6), ('cow', 5), ('aeroplane', 0), ('motorbike', 8), ('horse', 7), ('bird', 1), ('car', 3), ('cat', 4)]
+    total_class_counts = {0: 622034, 1: 245763, 2: 664689, 3: 125286, 4: 311316, 5: 500093, 6: 889816, 7: 839481, 8: 358913, 9: 1813897}
+    [class_labels_all,class_idx_all]=zip(*class_labels_map);
+
+    high_score_img='/disk2/res11/tubePatches/dog_21_19/6/63.jpg';
+    # low_score_img='/disk2/res11/tubePatches/dog_35_1/1/33.jpg';
+    low_score_img='/disk2/res11/tubePatches/dog_1_39/3/55.jpg'
+
+    # high_score_img='/disk2/res11/tubePatches/cat_10_4/1/283.jpg';
+    img_path=high_score_img
+    
+    class_label,video_id,shot_id,tube_id,frame_id=getPatchInfoFromPath(img_path);
+    class_idx=class_idx_all[class_labels_all.index(class_label)];
+    all_scores_file=all_scores_pre+class_label+'.p'    
+    [list_scores,list_files]=pickle.load(open(all_scores_file,'rb'));
+    idx_file=list_files.index(img_path);
+    score_file=list_scores[idx_file];
+
+    params_dict={};
+    params_dict['path_to_db'] = path_to_db
+    params_dict['path_to_hash'] = path_to_hash
+    params_dict['total_class_counts'] = total_class_counts
+    params_dict['img_path'] = img_path
+    params_dict['class_label'] = class_label
+    params_dict['video_id'] = video_id
+    params_dict['shot_id'] = shot_id
+    params_dict['class_idx'] = class_idx
+    params_dict['score_file'] = score_file
+
+    params=createParams('verifyRecordedScoreMatchesDBScore');
+    params=params(**params_dict)
+    script_verifyRecordedScoreMatchesDBScore(params);
+
 FOR script_scoreRandomFrames experiments_hashScoring
     class_labels_map=[('boat', 2), ('train', 9), ('dog', 6), ('cow', 5), ('aeroplane', 0), ('motorbike', 8), ('horse', 7), ('bird', 1), ('car', 3), ('cat', 4)]
     class_idx_all=[tuple_curr[1] for tuple_curr in class_labels_map];

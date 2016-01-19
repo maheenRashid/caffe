@@ -9,6 +9,7 @@ import sqlalchemy
 from sqlalchemy.orm import sessionmaker,relationship
 from sqlalchemy.sql import select
 import sqlalchemy
+# import sqlalchemy.distinct as distinct_func
 from sqlalchemy.schema import ForeignKey
 import numpy as np;
 import time
@@ -191,13 +192,18 @@ class Tube_Manipulator(object):
 
         return val_list
 
-    def selectMix(self,toSelect,criterion,limit=None):
+    def selectMix(self,toSelect,criterion,distinct=False,limit=None):
         if self.session is None:
             raise Exception('Open a Session First');
 
-        query=self.session.query(*toSelect).join(TubeHash,Tube.idx==TubeHash.idx).filter(*criterion)
+        query=self.session.query(*toSelect)
+        if distinct:
+            query=query.group_by(*toSelect);
+
+        query=query.join(TubeHash,Tube.idx==TubeHash.idx).filter(*criterion)
         if limit is not None:
             query=query.limit(limit);
+        # print query
         vals=self.session.execute(query)
         vals=[val for val in vals];
 
@@ -208,7 +214,8 @@ class Tube_Manipulator(object):
             raise Exception('Open a Session First');
 
         if distinct:
-            query=self.session.query(sqlalchemy.distinct(*toSelect))
+            # temp=sqlalchemy.distinct(*toSelect)
+            query=self.session.query(Tube).group_by(*toSelect)
         else:
             query=self.session.query(*toSelect)
 

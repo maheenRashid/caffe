@@ -151,7 +151,7 @@ def plotErrorBars(dict_to_plot,x_lim,y_lim,xlabel,y_label,title,out_file,margin=
     plt.savefig(out_file);
     plt.close();
 
-def plotSimple(xAndYs,out_file,title='',xlabel='',ylabel='',legend_entries=None,loc=0):
+def plotSimple(xAndYs,out_file,title='',xlabel='',ylabel='',legend_entries=None,loc=0,outside=False):
     plt.title(title);
     plt.xlabel(xlabel);
     plt.ylabel(ylabel);
@@ -161,8 +161,14 @@ def plotSimple(xAndYs,out_file,title='',xlabel='',ylabel='',legend_entries=None,
         handle,=plt.plot(x,y);
         handles.append(handle);
     if plt.legend is not None:
-        plt.legend(handles,legend_entries,loc=loc)
-    plt.savefig(out_file);
+        if outside:
+            lgd=plt.legend(handles,legend_entries,loc=loc,bbox_to_anchor=(1.05, 1),borderaxespad=0.)
+        else:
+            lgd=plt.legend(handles,legend_entries,loc=loc)    
+    if plt.legend is not None:
+        plt.savefig(out_file,bbox_extra_artists=(lgd,), bbox_inches='tight')
+    else:
+        plt.savefig(out_file);
     plt.close();    
 
 def writeHTMLForFolder(path_to_im,ext='jpg',height=300,width=300):

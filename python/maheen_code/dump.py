@@ -1,5 +1,26 @@
+FOR saveHashBinFrameCountsAll shot experiments_hashScoring
+    path_to_db='sqlite://///disk2/novemberExperiments/experiments_youtube/patches_nn_hash.db';
+    out_dir='/disk2/januaryExperiments/class_breakdowns'
+    out_file='shotCounts_all.p'
+    out_file=os.path.join(out_dir,out_file);
+    print out_file
+    class_idx_all=range(10);
+    num_hash_tables=32;
+    num_hash_vals=256;
+    layer='shot'
+    saveHashBinFrameCountsAll(out_file,out_dir,class_idx_all,num_hash_tables,num_hash_vals,layer=layer)
+
+
 FOR meta_script_saveNpzScorePerShot_normalized experiments_hashScoring
+    total_class_counts = {0: 622034, 1: 245763, 2: 664689, 3: 125286, 4: 311316, 5: 500093, 6: 889816, 7: 839481, 8: 358913, 9: 1813897}
+    total_counts=[];
+    for class_idx in range(10):
+        total_counts.append(total_class_counts[class_idx]);
+    total_counts=np.array(total_counts)
+    print total_counts
+
     params={};
+    params['total_class_counts'] = total_counts
     params['path_to_db'] = 'sqlite://///disk2/novemberExperiments/experiments_youtube/patches_nn_hash.db';
     params['file_binCounts'] = '/disk2/januaryExperiments/frameCounts/frameCounts_all.p';
     params['num_hash_tables'] = 32

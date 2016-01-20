@@ -896,7 +896,7 @@ def getAllClassesShotScoresByImgPath():
     for class_label,class_idx_assume in class_labels_map:
         print class_label,class_idx_assume,len(scores[class_idx_assume]),np.mean(scores[class_idx_assume])
 
-def saveHashBinFrameCountsAll(out_file,hash_dir,class_idx_all,num_hash_tables,num_hash_vals):
+def saveHashBinFrameCountsAll(out_file,hash_dir,class_idx_all,num_hash_tables,num_hash_vals,layer=None):
     hash_counts_all=np.zeros(shape=(num_hash_tables*num_hash_vals,len(class_idx_all)),dtype=int);
     hash_counts_all_keys=[];
     print hash_counts_all.shape
@@ -909,6 +909,10 @@ def saveHashBinFrameCountsAll(out_file,hash_dir,class_idx_all,num_hash_tables,nu
             file_curr=str(hash_table)+'_'+str(hash_val)+'_counts.p';
             file_curr=os.path.join(hash_dir,file_curr);
             counts=pickle.load(open(file_curr,'rb'));
+            
+            if layer is not None:
+                counts=counts[layer]
+
             for key_curr in counts:
                 hash_counts_all[idx_curr,key_curr]=counts[key_curr];
 
@@ -942,6 +946,7 @@ def script_saveNpzScorePerShot_normalized(params):
     shot_id =  params['shot_id']
     out_file_scores =  params['out_file_scores']
     num_hash_tables = params['num_hash_tables']
+    total_counts = params['total_class_counts']
     
     class_idx_assume = params.get('class_idx_assume',None);
     if class_idx_assume is None:
@@ -955,11 +960,11 @@ def script_saveNpzScorePerShot_normalized(params):
     toSelect=(Tube.tube_id,Tube.deep_features_idx,TubeHash.hash_table,TubeHash.hash_val);
     criterion=(Tube.video_id==video_id,Tube.class_idx_pascal==class_idx,Tube.shot_id==shot_id);
     vals=mani.selectMix(toSelect,criterion);
-    total_frames = getShotFrameCount(mani,class_idx,video_id,shot_id);
+    # total_frames = getShotFrameCount(mani,class_idx,video_id,shot_id);
     mani.closeSession();
 
     hash_count_keys,hash_counts=pickle.load(open(file_binCounts,'rb'));
-    total_counts=np.sum(hash_counts,axis=0);
+    # total_counts=np.sum(hash_counts,axis=0);
 
     scores_all={};
     vals=np.array(vals)
@@ -1022,22 +1027,50 @@ def meta_script_saveNpzScorePerShot_normalized(params,out_dir_scores):
             args.append(params_curr);    
 
     print len(args)
-
+    # args=args[:1];
     n_jobs=12
     p = multiprocessing.Pool(min(multiprocessing.cpu_count(),n_jobs))
     p.map(script_saveNpzScorePerShot_normalized,args);
 
-def main(): 
+
+def main():
+    
+    path_to_db='sqlite://///disk2/novemberExperiments/experiments_youtube/patches_nn_hash.db';
+    out_dir='/disk2/januaryExperiments/class_breakdowns'
+    out_file='shotCounts_all.p'
+    out_file=os.path.join(out_dir,out_file);
+    print out_file
+    class_idx_all=range(10);
+    num_hash_tables=32;
+    num_hash_vals=256;
+    layer='shot'
+    # saveHashBinFrameCountsAll(out_file,out_dir,class_idx_all,num_hash_tables,num_hash_vals,layer=layer)
+    file_curr=os.path.join(out_dir,'total_counts_breakdown.p');
+    k=pickle.load(open(file_curr,'rb'));
+    total_counts=[];
+    for class_idx in class_idx_all:
+        total_counts.append(k[layer][class_idx]);
+
+    total_counts=np.array(total_counts);
+    print total_counts,sum(total_counts)
+
     params={};
-    params['path_to_db'] = 'sqlite://///disk2/novemberExperiments/experiments_youtube/patches_nn_hash.db';
-    params['file_binCounts'] = '/disk2/januaryExperiments/frameCounts/frameCounts_all.p';
+    params['total_class_counts'] = total_counts
+    params['path_to_db'] = path_to_db
+    params['file_binCounts'] = out_file
     params['num_hash_tables'] = 32
     
-    out_dir_scores='/disk2/januaryExperiments/shot_score_normalized/';
+    out_dir_scores='/disk2/januaryExperiments/shot_score_normalized_perShot/';
     if not os.path.exists(out_dir_scores):
         os.mkdir(out_dir_scores);
-
-    
+        
+    meta_script_saveNpzScorePerShot_normalized(params,out_dir_scores)
+    # a=pickle.load(open(os.path.join(out_dir_scores,'2_15_48.p'),'rb'));
+    # print a.keys();
+    # for k in a.keys():
+    #     print k,a[k].shape,np.mean(a[k]);
+    # print a[0].shape,np.mean(a[0],axis=1);
+    # print a[8].shape,np.mean(a[8],axis=1);
 
 
         

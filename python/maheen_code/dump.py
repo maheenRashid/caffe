@@ -1,3 +1,24 @@
+FOR getListScoresAndPatches multiproc experiments_hashScoring
+    path_to_db='sqlite://///disk2/novemberExperiments/experiments_youtube/patches_nn_hash.db';
+    score_dir='/disk2/januaryExperiments/shot_score_normalized_perShot';
+    out_dir='/disk2/januaryExperiments/shot_score_normalized_perShot_analysis';
+    
+    if not os.path.exists(out_dir):
+        os.mkdir(out_dir);
+
+    path_to_patches='/disk2/res11/tubePatches';
+    class_labels_map = [('boat', 2), ('train', 9), ('dog', 6), ('cow', 5), ('aeroplane', 0), ('motorbike', 8), ('horse', 7), ('bird', 1), ('car', 3), ('cat', 4)]
+    n_jobs=12;
+
+    [class_labels,class_idx_all]=zip(*class_labels_map);
+    
+    for selected_class in range(10):
+        class_label=class_labels[class_idx_all.index(selected_class)]
+        out_file=os.path.join(out_dir,'all_scores_patches_'+class_label+'.p')
+        score_files=[os.path.join(score_dir,file_curr) for file_curr in os.listdir(score_dir) if file_curr.endswith('.p') and file_curr.startswith(str(selected_class)+'_')];
+        list_scores,list_files=getListScoresAndPatches(score_files,class_label,path_to_patches,n_jobs=n_jobs)
+        pickle.dump([list_scores,list_files],open(out_file,'wb'));
+
 FOR saveHashBinFrameCountsAll shot experiments_hashScoring
     path_to_db='sqlite://///disk2/novemberExperiments/experiments_youtube/patches_nn_hash.db';
     out_dir='/disk2/januaryExperiments/class_breakdowns'

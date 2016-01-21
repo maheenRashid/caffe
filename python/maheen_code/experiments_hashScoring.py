@@ -18,6 +18,7 @@ import cudarray as ca
 import nearest_neighbor
 import multiprocessing
 from collections import Counter
+import itertools
 
 def createParams(type_Experiment):
     if type_Experiment == 'scoreRandomFrames':
@@ -591,7 +592,6 @@ def getNRankedPatches(list_scores,list_files,num_to_display):
     scores_picked=list_scores_sorted[idx_display];
     return img_paths,scores_picked,idx_display
 
-
 def visualizeRankedPatchesPerClass(class_score_info,num_to_display,out_file_html,rel_path,height_width):
     
     img_paths_all=[];
@@ -618,33 +618,73 @@ def visualizeRankedPatchesPerClass(class_score_info,num_to_display,out_file_html
     visualize.writeHTML(out_file_html,img_paths_all,captions_all,height_width[0],height_width[0]);
     print out_file_html
 
-def getListScoresAndPatches(score_files,class_label,path_to_patches):
-    print len(score_files);
+def getListScoresAndPatches_multiProc((idx_file_curr,file_curr,class_label,path_to_patches)):
     list_scores=[];
     list_files=[];
+    print idx_file_curr,file_curr
+    file_name=file_curr[file_curr.rindex('/')+1:file_curr.rindex('.')];
+    class_idx=int(file_name[:file_name.index('_')]);
+    video_id=int(file_name[file_name.index('_')+1:file_name.rindex('_')]);
+    shot_id=int(file_name[file_name.rindex('_')+1:]);
+
+    scores = pickle.load(open(file_curr,'rb'));
+
+    shot_string = class_label
+    shot_string = os.path.join(path_to_patches,shot_string+'_'+str(video_id)+'_'+str(shot_id));
+    
+    for tube_id in scores:
+        scores_curr = scores[tube_id];
+        scores_curr = np.mean(scores_curr,axis=1);
+        list_scores.extend(list(scores_curr))
+        
+        txt_file = os.path.join(path_to_patches,shot_string,str(tube_id),str(tube_id)+'.txt');
+        patch_paths = util.readLinesFromFile(txt_file)
+        assert len(patch_paths)==scores_curr.shape[0]
+        list_files.extend(patch_paths);
+    return (list_scores,list_files)
+
+def getListScoresAndPatches(score_files,class_label,path_to_patches,n_jobs=None):
+    # print len(score_files);
+    list_scores=[];
+    list_files=[];
+    args=[];
 
     for idx_file_curr,file_curr in enumerate(score_files):
-        print idx_file_curr,file_curr
-        file_name=file_curr[file_curr.rindex('/')+1:file_curr.rindex('.')];
-        class_idx=int(file_name[:file_name.index('_')]);
-        video_id=int(file_name[file_name.index('_')+1:file_name.rindex('_')]);
-        shot_id=int(file_name[file_name.rindex('_')+1:]);
+        args.append((idx_file_curr,file_curr,class_label,path_to_patches));
 
-        scores = pickle.load(open(file_curr,'rb'));
+    if n_jobs is None:
+        for arg in args:
+            list_scores_curr,list_files_curr=getListScoresAndPatches_multiProc(arg);
+            list_scores.append(list_scores_curr);
+            list_files.append(list_files_curr);
+    else:
+        p=multiprocessing.Pool(n_jobs);
+        results=p.map(getListScoresAndPatches_multiProc,args);
+        [list_scores,list_files]=zip(*results);
 
-        shot_string = class_label
-        # class_labels[class_idx_all.index(class_idx)];
-        shot_string = os.path.join(path_to_patches,shot_string+'_'+str(video_id)+'_'+str(shot_id));
+    list_scores=list(itertools.chain.from_iterable(list_scores))
+    list_files=list(itertools.chain.from_iterable(list_files))
+        # print idx_file_curr,file_curr
+        # file_name=file_curr[file_curr.rindex('/')+1:file_curr.rindex('.')];
+        # class_idx=int(file_name[:file_name.index('_')]);
+        # video_id=int(file_name[file_name.index('_')+1:file_name.rindex('_')]);
+        # shot_id=int(file_name[file_name.rindex('_')+1:]);
+
+        # scores = pickle.load(open(file_curr,'rb'));
+
+        # shot_string = class_label
+        # # class_labels[class_idx_all.index(class_idx)];
+        # shot_string = os.path.join(path_to_patches,shot_string+'_'+str(video_id)+'_'+str(shot_id));
         
-        for tube_id in scores:
-            scores_curr = scores[tube_id];
-            scores_curr = np.mean(scores_curr,axis=1);
-            list_scores.extend(list(scores_curr))
+        # for tube_id in scores:
+        #     scores_curr = scores[tube_id];
+        #     scores_curr = np.mean(scores_curr,axis=1);
+        #     list_scores.extend(list(scores_curr))
             
-            txt_file = os.path.join(path_to_patches,shot_string,str(tube_id),str(tube_id)+'.txt');
-            patch_paths = util.readLinesFromFile(txt_file)
-            assert len(patch_paths)==scores_curr.shape[0]
-            list_files.extend(patch_paths);
+        #     txt_file = os.path.join(path_to_patches,shot_string,str(tube_id),str(tube_id)+'.txt');
+        #     patch_paths = util.readLinesFromFile(txt_file)
+        #     assert len(patch_paths)==scores_curr.shape[0]
+        #     list_files.extend(patch_paths);
 
     return list_scores,list_files
 
@@ -937,7 +977,6 @@ def getHashInfoForImg(path_to_db,img_path):
     mani_hash.closeSession();
     return hash_info_patch
     
-
 def script_saveNpzScorePerShot_normalized(params):
     path_to_db = params['path_to_db']
     file_binCounts = params['file_binCounts']
@@ -960,10 +999,13 @@ def script_saveNpzScorePerShot_normalized(params):
     toSelect=(Tube.tube_id,Tube.deep_features_idx,TubeHash.hash_table,TubeHash.hash_val);
     criterion=(Tube.video_id==video_id,Tube.class_idx_pascal==class_idx,Tube.shot_id==shot_id);
     vals=mani.selectMix(toSelect,criterion);
-    # total_frames = getShotFrameCount(mani,class_idx,video_id,shot_id);
+    total_frames = getShotFrameCount(mani,class_idx,video_id,shot_id);
     mani.closeSession();
 
     hash_count_keys,hash_counts=pickle.load(open(file_binCounts,'rb'));
+
+    hash_info=[tuple(r) for r in vals[:,2:]];
+    hash_counts = dict(Counter(hash_info))
     # total_counts=np.sum(hash_counts,axis=0);
 
     scores_all={};
@@ -1002,7 +1044,7 @@ def script_saveNpzScorePerShot_normalized(params):
 
     pickle.dump(scores_all,open(out_file_scores,'wb'));
 
-def meta_script_saveNpzScorePerShot_normalized(params,out_dir_scores):
+def meta_script_saveNpzScorePerShot_normalized(params,out_dir_scores,out_dir_actual):
 
     mani=TubeHash_Manipulator(params['path_to_db']);
     mani.openSession();
@@ -1022,19 +1064,89 @@ def meta_script_saveNpzScorePerShot_normalized(params,out_dir_scores):
         params_curr['idx'] = idx;
 
         if os.path.exists(params_curr['out_file_scores']):
-            continue;
-        else:
+        #     continue;
+        # else:
+            params_curr['out_file_scores']=os.path.join(out_dir_actual,file_curr)
             args.append(params_curr);    
 
     print len(args)
-    # args=args[:1];
+    # args=args[3000:];
+    print len(args)
     n_jobs=12
     p = multiprocessing.Pool(min(multiprocessing.cpu_count(),n_jobs))
     p.map(script_saveNpzScorePerShot_normalized,args);
 
 
 def main():
+    out_dir='/disk2/januaryExperiments/shot_score_normalized_perShot_analysis';
+    class_labels_map = [('boat', 2), ('train', 9), ('dog', 6), ('cow', 5), ('aeroplane', 0), ('motorbike', 8), ('horse', 7), ('bird', 1), ('car', 3), ('cat', 4)]
+    [class_labels,class_idx_all]=zip(*class_labels_map);
     
+    for num_to_display in [10,100,1000]:
+        out_file_html=os.path.join(out_dir,'all_scores_patches_sorted_'+str(num_to_display))+'.html';
+        rel_path=['/disk2','../../..'];
+        height_width=[400,400];
+        
+        class_score_info=[];
+        for class_label,class_idx in class_labels_map:
+            out_file=os.path.join(out_dir,'all_scores_patches_'+class_label+'.p')
+            tuple_curr=(class_idx,class_label,out_file)
+            print tuple_curr
+            class_score_info.append(tuple_curr);
+        
+        visualizeRankedPatchesPerClass(class_score_info,num_to_display,out_file_html,rel_path,height_width)
+
+    return
+    path_to_db='sqlite://///disk2/novemberExperiments/experiments_youtube/patches_nn_hash.db';
+    score_dir='/disk2/januaryExperiments/shot_score_normalized_perShot';
+    out_dir='/disk2/januaryExperiments/shot_score_normalized_perShot_analysis';
+    
+    if not os.path.exists(out_dir):
+        os.mkdir(out_dir);
+
+    path_to_patches='/disk2/res11/tubePatches';
+    class_labels_map = [('boat', 2), ('train', 9), ('dog', 6), ('cow', 5), ('aeroplane', 0), ('motorbike', 8), ('horse', 7), ('bird', 1), ('car', 3), ('cat', 4)]
+    n_jobs=12;
+
+    [class_labels,class_idx_all]=zip(*class_labels_map);
+    
+    for selected_class in range(10):
+        class_label=class_labels[class_idx_all.index(selected_class)]
+        out_file=os.path.join(out_dir,'all_scores_patches_'+class_label+'.p')
+        score_files=[os.path.join(score_dir,file_curr) for file_curr in os.listdir(score_dir) if file_curr.endswith('.p') and file_curr.startswith(str(selected_class)+'_')];
+        list_scores,list_files=getListScoresAndPatches(score_files,class_label,path_to_patches,n_jobs=n_jobs)
+        pickle.dump([list_scores,list_files],open(out_file,'wb'));
+    
+
+    return
+    # total_class_counts = {0: 622034, 1: 245763, 2: 664689, 3: 125286, 4: 311316, 5: 500093, 6: 889816, 7: 839481, 8: 358913, 9: 1813897}
+    # total_counts=[];
+    # for class_idx in range(10):
+    #     total_counts.append(total_class_counts[class_idx]);
+    # total_counts=np.array(total_counts)
+    # print total_counts
+
+    # params={};
+    # params['total_class_counts'] = total_counts
+    # params['path_to_db'] = 'sqlite://///disk2/novemberExperiments/experiments_youtube/patches_nn_hash.db';
+    # params['file_binCounts'] = '/disk2/januaryExperiments/frameCounts/frameCounts_all.p';
+    # params['num_hash_tables'] = 32
+
+    # # out_dir_scores='/disk2/januaryExperiments/shot_score_normalized/';
+    # # params['class_idx'] = 9
+    # # params['video_id'] = 6
+    # # params['shot_id'] = 15
+    # # file_curr = str(params['class_idx'])+'_'+str(params['video_id'])+'_'+str(params['shot_id'])+'.p';
+    # # params['out_file_scores'] = os.path.join(out_dir_scores,file_curr)
+    # # params['idx'] = 0
+    # # script_saveNpzScorePerShot_normalized(params)
+    # out_dir_scores='/disk2/januaryExperiments/shot_score_normalized/';
+    # if not os.path.exists(out_dir_scores):
+    #     os.mkdir(out_dir_scores);
+    # out_dir_actual='/disk1/maheen_data/shot_score_normalized/';
+    # meta_script_saveNpzScorePerShot_normalized(params,out_dir_scores,out_dir_actual)
+
+    return
     path_to_db='sqlite://///disk2/novemberExperiments/experiments_youtube/patches_nn_hash.db';
     out_dir='/disk2/januaryExperiments/class_breakdowns'
     out_file='shotCounts_all.p'
@@ -1060,11 +1172,11 @@ def main():
     params['file_binCounts'] = out_file
     params['num_hash_tables'] = 32
     
-    out_dir_scores='/disk2/januaryExperiments/shot_score_normalized_perShot/';
+    out_dir_scores='/disk2/januaryExperiments/shot_score_normalized/';
     if not os.path.exists(out_dir_scores):
         os.mkdir(out_dir_scores);
-        
-    meta_script_saveNpzScorePerShot_normalized(params,out_dir_scores)
+    out_dir_actual='/disk1/maheen_data/shot_score_normalize_shotLevel';
+    meta_script_saveNpzScorePerShot_normalized(params,out_dir_scores,out_dir_actual)
     # a=pickle.load(open(os.path.join(out_dir_scores,'2_15_48.p'),'rb'));
     # print a.keys();
     # for k in a.keys():

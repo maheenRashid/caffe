@@ -45,3 +45,39 @@ def product(arr):
     for l in arr:
         p *= l
     return p;
+
+def getIOU(box_1,box_2):
+    box_1=np.array(box_1);
+    box_2=np.array(box_2);
+    minx_t=min(box_1[0],box_2[0]);
+    miny_t=min(box_1[1],box_2[1]);
+    min_vals=np.array([minx_t,miny_t,minx_t,miny_t]);
+    box_1=box_1-min_vals;
+    box_2=box_2-min_vals;
+    # print box_1,box_2
+    maxx_t=max(box_1[2],box_2[2]);
+    maxy_t=max(box_1[3],box_2[3]);
+    img=np.zeros(shape=(maxx_t,maxy_t));
+    img[box_1[0]:box_1[2],box_1[1]:box_1[3]]=1;
+    img[box_2[0]:box_2[2],box_2[1]:box_2[3]]=img[box_2[0]:box_2[2],box_2[1]:box_2[3]]+1;
+    # print np.min(img),np.max(img)
+    count_union=np.sum(img>0);
+    count_int=np.sum(img==2);
+    # print count_union,count_int
+    # plt.figure();
+    # plt.imshow(img,vmin=0,vmax=10);
+    # plt.show();
+    iou=count_int/float(count_union);
+    return iou
+
+def escapeString(string):
+    special_chars='!"&\'()*,:;<=>?@[]`{|}';
+    for special_char in special_chars:
+        string=string.replace(special_char,'\\'+special_char);
+    return string
+
+def replaceSpecialChar(string,replace_with):
+    special_chars='!"&\'()*,:;<=>?@[]`{|}';
+    for special_char in special_chars:
+        string=string.replace(special_char,replace_with);
+    return string

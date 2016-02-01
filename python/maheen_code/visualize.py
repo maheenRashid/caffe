@@ -180,6 +180,53 @@ def writeHTMLForFolder(path_to_im,ext='jpg',height=300,width=300):
     writeHTML(out_file_html,im_paths,captions,height=height,width=width);
 
 
+def plotGroupBar(out_file,dict_vals,xtick_labels,legend_vals,colors,xlabel='',ylabel='',title='',width=0.25,ylim=None):
+    # Setting the positions and width for the bars
+    # if ylim is None:
+    #     vals=dict_vals.values();
+    #     vals=[v for v in val for val in values];
+    #     ylim[
+    plt.figure();
+    plt.title(title);
+    plt.xlabel(xlabel);
+    plt.ylabel(ylabel);
+    # w=len(legend_vals)*width
+    # pos = np.arange(0,w*len(xtick_labels),w)
+    pos=range(len(xtick_labels));
+
+    pos = [pos_curr+(pos_curr*width) for pos_curr in pos]
+    # pos[0]=0.0;
+    print pos
+    # width = 0.25
+
+    # Plotting the bars
+    # fig, ax = plt.subplots(figsize=(10,5))
+
+
+    # Create a bar with pre_score data,
+    # in position pos,
+
+    for pos_idx,legend_val in enumerate(legend_vals):
+        print legend_val,[p + width*pos_idx for p in pos],dict_vals[legend_val]
+        plt.bar([p + width*pos_idx for p in pos],dict_vals[legend_val],width,color=colors[pos_idx],label=legend_val)
+
+    ax = plt.gca()
+    
+    ax.set_xticks([p + len(legend_vals)/2.0 * width for p in pos])
+    print 'xticks' ,[p + len(legend_vals)/2.0 * width for p in pos]
+    ax.set_xticklabels(xtick_labels,rotation=45)
+    ax.legend( legend_vals,loc=0)
+# Setting the x-axis and y-axis limits
+    # plt.xlim(xlim[0],xlim[1])
+    if ylim is not None:
+        plt.ylim(ylim )
+
+# Adding the legend and showing the plot
+    plt.savefig(out_file, bbox_inches='tight');
+    plt.close();  
+
+
+
 def main():
     print 'hello';
 

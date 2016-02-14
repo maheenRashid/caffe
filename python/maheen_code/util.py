@@ -1,5 +1,6 @@
 import numpy as np;
 import scipy
+import subprocess;
 
 def getIndexingArray(big_array,small_array):
     small_array=np.array(small_array);
@@ -81,3 +82,19 @@ def replaceSpecialChar(string,replace_with):
     for special_char in special_chars:
         string=string.replace(special_char,replace_with);
     return string
+
+def writeFile(file_name,list_to_write):
+    with open(file_name,'wb') as f:
+        for string in list_to_write:
+            f.write(string+'\n');
+
+def getAllSubDirectories(meta_dir):
+    meta_dir=escapeString(meta_dir);
+    command='find '+meta_dir+' -type d';
+    sub_dirs=subprocess.check_output(command,shell=True)
+    sub_dirs=sub_dirs.split('\n');
+    print len(sub_dirs);
+    # sub_dirs=list();
+    return sub_dirs
+    
+        
